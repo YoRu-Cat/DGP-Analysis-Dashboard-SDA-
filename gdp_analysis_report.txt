@@ -1,0 +1,19 @@
+================================================================================
+CORRELATION ANALYSIS
+================================================================================
+
+HIGHEST CORRELATIONS:
+--------------------------------------------------------------------------------
+ 1. Austria                   <-> Latvia                    :  0.983
+ 2. Australia                 <-> Cabo Verde                :  0.979
+ 3. Australia                 <-> Korea, Rep.               :  0.977
+ 4. Austria                   <-> Cabo Verde                :  0.976
+ 5. Australia                 <-> Late-demographic dividend :  0.975
+ 6. Austria                   <-> Korea, Rep.               :  0.973
+ 7. Cabo Verde                <-> Latvia                    :  0.973
+ 8. Australia                 <-> Azerbaijan                :  0.968
+ 9. Cabo Verde                <-> Korea, Rep.               :  0.964
+10. Australia                 <-> Austria                   :  0.960
+
+================================================================================
+

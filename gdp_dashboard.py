@@ -1,7 +1,5 @@
-"""
-GDP Analysis Dashboard
-A comprehensive tool for analyzing and visualizing GDP data across countries and continents
-"""
+# GDP Analysis Dashboard
+# Mulkon aur continents ka GDP data analyze karne ke liye
 
 import pandas as pd
 import numpy as np
@@ -14,7 +12,7 @@ from tkinter import ttk, messagebox, scrolledtext
 import warnings
 warnings.filterwarnings('ignore')
 
-# Set style for better visualizations
+# Graph styling
 sns.set_style("whitegrid")
 plt.rcParams['figure.figsize'] = (12, 6)
 
@@ -26,25 +24,22 @@ class GDPDashboard:
         self.root.geometry("1400x900")
         self.root.configure(bg='#f0f0f0')
         
-        # Load data
         self.load_data()
-        
-        # Create UI
         self.create_widgets()
         
-        # Show default visualization on startup
+        # Shuru mein ek default graph dikhao
         self.root.after(100, self.show_default_analysis)
         
     def load_data(self):
-        """Load and prepare GDP data"""
+        # Excel file se data load karo
         try:
             self.df = pd.read_excel('gdp_with_continent_filled.xlsx')
             
-            # Extract year columns
+            # Year columns nikalo
             self.year_columns = [col for col in self.df.columns if isinstance(col, int)]
             self.year_columns.sort()
             
-            # Get unique countries and continents
+            # Countries aur continents ki list banao
             self.countries = sorted(self.df['Country Name'].unique())
             self.continents = sorted(self.df['Continent'].dropna().unique())
             
@@ -55,8 +50,7 @@ class GDPDashboard:
             self.root.destroy()
     
     def create_widgets(self):
-        """Create the main UI layout"""
-        # Title
+        # Title bar banao
         title_frame = tk.Frame(self.root, bg='#2c3e50', height=80)
         title_frame.pack(fill=tk.X, padx=10, pady=10)
         title_frame.pack_propagate(False)
@@ -70,16 +64,15 @@ class GDPDashboard:
         )
         title_label.pack(expand=True)
         
-        # Main container
         main_container = tk.Frame(self.root, bg='#f0f0f0')
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        # Left panel - Controls
+        # Baayi taraf control panel
         left_panel = tk.Frame(main_container, bg='white', width=350, relief=tk.RAISED, borderwidth=2)
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, padx=(0, 10), pady=5)
         left_panel.pack_propagate(False)
         
-        # Right panel - Visualizations
+        # Daahini taraf visualization panel
         right_panel = tk.Frame(main_container, bg='white', relief=tk.RAISED, borderwidth=2)
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, pady=5)
         
@@ -87,8 +80,7 @@ class GDPDashboard:
         self.create_visualization_panel(right_panel)
         
     def create_control_panel(self, parent):
-        """Create control panel with analysis options"""
-        # Scrollable frame
+        # Scrollable frame banao controls ke liye
         canvas = tk.Canvas(parent, bg='white', highlightthickness=0)
         scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg='white')
@@ -101,7 +93,7 @@ class GDPDashboard:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
-        # Analysis Type Selection
+        # Analysis type ka section
         self.create_section_header(scrollable_frame, "📈 Analysis Type")
         
         self.analysis_type = tk.StringVar(value="country_trend")
@@ -128,17 +120,17 @@ class GDPDashboard:
             )
             rb.pack(anchor=tk.W, padx=20, pady=2)
         
-        # Country Selection
+        # Country selection section
         self.create_section_header(scrollable_frame, "🌐 Country Selection")
         
-        # Primary country
+        # Pehla country dropdown
         tk.Label(scrollable_frame, text="Primary Country:", bg='white', font=('Arial', 9, 'bold')).pack(anchor=tk.W, padx=20, pady=(5, 2))
         self.country_var = tk.StringVar(value=self.countries[0])
         country_combo = ttk.Combobox(scrollable_frame, textvariable=self.country_var, values=self.countries, width=30, state='readonly')
         country_combo.pack(padx=20, pady=(0, 10))
         country_combo.bind('<<ComboboxSelected>>', lambda e: self.on_primary_country_change())
         
-        # Secondary countries (for comparison)
+        # Compare karne ke liye countries ki list
         tk.Label(scrollable_frame, text="Compare With:", bg='white', font=('Arial', 9, 'bold')).pack(anchor=tk.W, padx=20, pady=(5, 2))
         
         compare_frame = tk.Frame(scrollable_frame, bg='white')
@@ -155,7 +147,7 @@ class GDPDashboard:
         compare_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.compare_listbox.bind('<<ListboxSelect>>', lambda e: self.on_compare_selection_change())
         
-        # Continent Selection
+        # Continent selection dropdown
         self.create_section_header(scrollable_frame, "🗺️ Continent Selection")
         
         self.continent_var = tk.StringVar(value=self.continents[0] if self.continents else "")
@@ -163,7 +155,7 @@ class GDPDashboard:
         continent_combo.pack(padx=20, pady=(0, 10))
         continent_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
         
-        # Year Range Selection
+        # Year range ki selection
         self.create_section_header(scrollable_frame, "📅 Year Range")
         
         year_frame = tk.Frame(scrollable_frame, bg='white')
@@ -181,7 +173,7 @@ class GDPDashboard:
         end_year_combo.grid(row=0, column=3)
         end_year_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
         
-        # Top N Selection
+        # Top N countries ki selection
         self.create_section_header(scrollable_frame, "🏆 Top N Countries")
         
         top_frame = tk.Frame(scrollable_frame, bg='white')
@@ -192,7 +184,7 @@ class GDPDashboard:
         top_n_spinner = tk.Spinbox(top_frame, from_=5, to=50, textvariable=self.top_n_var, width=10, command=self.on_selection_change)
         top_n_spinner.pack(side=tk.LEFT)
         
-        # Action Buttons
+        # Action buttons
         button_frame = tk.Frame(scrollable_frame, bg='white')
         button_frame.pack(pady=20, padx=20, fill=tk.X)
         
@@ -239,7 +231,7 @@ class GDPDashboard:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
     def create_section_header(self, parent, text):
-        """Create a styled section header"""
+        # Section header banao
         frame = tk.Frame(parent, bg='#ecf0f1', height=35)
         frame.pack(fill=tk.X, padx=15, pady=(15, 5))
         frame.pack_propagate(False)
@@ -248,20 +240,20 @@ class GDPDashboard:
         label.pack(anchor=tk.W, padx=10, pady=5)
         
     def create_visualization_panel(self, parent):
-        """Create visualization panel"""
-        # Notebook for tabs
+        # Visualization panel mein tabs banao
+        
         self.notebook = ttk.Notebook(parent)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Visualization tab
+        # Pehla tab - graphs ke liye
         self.viz_frame = tk.Frame(self.notebook, bg='white')
         self.notebook.add(self.viz_frame, text="📊 Visualization")
         
-        # Statistics tab
+        # Dusra tab - statistics ke liye
         self.stats_frame = tk.Frame(self.notebook, bg='white')
         self.notebook.add(self.stats_frame, text="📋 Statistics")
         
-        # Statistics text area
+        # Stats text area
         self.stats_text = scrolledtext.ScrolledText(
             self.stats_frame,
             wrap=tk.WORD,
@@ -273,44 +265,35 @@ class GDPDashboard:
         self.stats_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
     def on_analysis_change(self):
-        """Handle analysis type change"""
-        # Don't auto-switch when user manually changes analysis type
+        # Jab user analysis type change kare
         self.perform_analysis_delayed()
     
     def on_primary_country_change(self):
-        """Handle primary country dropdown change"""
-        # Switch to Country GDP Trend mode when primary country is changed
+        # Jab primary country change ho
         if self.analysis_type.get() in ["country_trend", "compare_countries", "growth_rate"]:
             self.analysis_type.set("country_trend")
-        # Clear compare listbox selections
         self.compare_listbox.selection_clear(0, tk.END)
         self.perform_analysis_delayed()
     
     def on_compare_selection_change(self):
-        """Handle compare countries listbox selection change"""
-        # Auto-switch to Compare Countries if multiple countries are selected
+        # Jab compare list mein selection change ho
         selected_indices = self.compare_listbox.curselection()
         if len(selected_indices) > 1:
             self.analysis_type.set("compare_countries")
-        elif len(selected_indices) == 1:
-            # If only one country selected, stay in compare mode if already there
-            pass
         self.perform_analysis_delayed()
     
     def on_selection_change(self):
-        """Handle any other selection change and update visualization"""
+        # Koi bhi selection change ho to update karo
         self.perform_analysis_delayed()
     
     def perform_analysis_delayed(self):
-        """Delayed analysis execution to avoid rapid updates"""
-        # Cancel any pending update
+        # Thoda delay kar ke analysis chalaao taake bahut zyada updates na hon
         if hasattr(self, '_update_timer'):
             self.root.after_cancel(self._update_timer)
-        # Schedule update after 300ms to avoid rapid updates
         self._update_timer = self.root.after(300, self.perform_analysis)
         
     def get_year_range(self):
-        """Get selected year range"""
+        # Selected year range nikalo
         start_year = int(self.start_year_var.get())
         end_year = int(self.end_year_var.get())
         
@@ -320,7 +303,7 @@ class GDPDashboard:
         return [y for y in self.year_columns if start_year <= y <= end_year]
         
     def perform_analysis(self):
-        """Perform the selected analysis"""
+        # Jo analysis select hai wo chalaao
         analysis = self.analysis_type.get()
         
         try:
@@ -346,7 +329,7 @@ class GDPDashboard:
             print(f"Error details: {e}")
     
     def plot_country_trend(self):
-        """Plot GDP trend for a single country"""
+        # Ek country ka GDP trend dikhao
         country = self.country_var.get()
         years = self.get_year_range()
         
@@ -357,7 +340,7 @@ class GDPDashboard:
             
         gdp_values = country_data[years].values.flatten()
         
-        # Create plot
+        # Graph banao
         fig = Figure(figsize=(12, 6))
         ax = fig.add_subplot(111)
         
@@ -368,18 +351,17 @@ class GDPDashboard:
         ax.grid(True, alpha=0.3)
         ax.ticklabel_format(style='plain', axis='y')
         
-        # Rotate x-axis labels if too many years
+        # Agar bahut zyada years hain to labels ghumao
         if len(years) > 20:
             ax.tick_params(axis='x', rotation=45)
         
         fig.tight_layout()
         self.display_plot(fig)
         
-        # Show statistics
         self.show_country_statistics(country, years, gdp_values)
     
     def plot_compare_countries(self):
-        """Compare GDP trends for multiple countries"""
+        # Multiple countries ka comparison dikhao
         selected_indices = self.compare_listbox.curselection()
         if not selected_indices:
             messagebox.showwarning("Warning", "Please select countries to compare")
@@ -392,7 +374,6 @@ class GDPDashboard:
             
         years = self.get_year_range()
         
-        # Create plot
         fig = Figure(figsize=(12, 6))
         ax = fig.add_subplot(111)
         
@@ -418,11 +399,10 @@ class GDPDashboard:
         fig.tight_layout()
         self.display_plot(fig)
         
-        # Show comparison statistics
         self.show_comparison_statistics(countries, years)
     
     def plot_continent_analysis(self):
-        """Analyze GDP by continent"""
+        # Continent wise GDP analysis dikhao
         continent = self.continent_var.get()
         years = self.get_year_range()
         
@@ -431,7 +411,7 @@ class GDPDashboard:
             messagebox.showwarning("Warning", f"No data found for {continent}")
             return
         
-        # Create subplots
+        # Multiple subplots banao
         fig = Figure(figsize=(14, 10))
         
         # Plot 1: Total GDP trend
@@ -480,11 +460,10 @@ class GDPDashboard:
         fig.tight_layout()
         self.display_plot(fig)
         
-        # Show continent statistics
         self.show_continent_statistics(continent, years)
     
     def plot_top_countries(self):
-        """Plot top N countries by GDP"""
+        # Top N countries ka GDP dikhao
         top_n = self.top_n_var.get()
         years = self.get_year_range()
         latest_year = years[-1]
@@ -505,7 +484,7 @@ class GDPDashboard:
         ax.ticklabel_format(style='plain', axis='x')
         ax.grid(axis='x', alpha=0.3)
         
-        # Add value labels
+        # Value labels lagao bars par
         for i, (bar, value) in enumerate(zip(bars, gdp_list)):
             ax.text(value, bar.get_y() + bar.get_height()/2, 
                    f' {value:,.0f}', 
@@ -514,11 +493,10 @@ class GDPDashboard:
         fig.tight_layout()
         self.display_plot(fig)
         
-        # Show top countries statistics
         self.show_top_countries_statistics(top_countries, latest_year)
     
     def plot_growth_rate(self):
-        """Plot GDP growth rate"""
+        # GDP growth rate dikhao
         country = self.country_var.get()
         years = self.get_year_range()
         
@@ -533,7 +511,7 @@ class GDPDashboard:
         
         gdp_values = country_data[years].values.flatten()
         
-        # Calculate growth rates
+        # Growth rates calculate karo
         growth_rates = []
         growth_years = []
         
@@ -543,7 +521,7 @@ class GDPDashboard:
                 growth_rates.append(growth_rate)
                 growth_years.append(years[i])
         
-        # Create plot
+        # Graph banao
         fig = Figure(figsize=(12, 6))
         ax = fig.add_subplot(111)
         
@@ -561,11 +539,10 @@ class GDPDashboard:
         fig.tight_layout()
         self.display_plot(fig)
         
-        # Show growth statistics
         self.show_growth_statistics(country, growth_years, growth_rates)
     
     def plot_year_comparison(self):
-        """Compare GDP across continents for specific years"""
+        # Alag alag years mein continents ka comparison
         years = self.get_year_range()
         
         # Select evenly spaced years for comparison
@@ -920,21 +897,20 @@ class GDPDashboard:
         self.stats_text.insert(1.0, stats_text)
     
     def display_plot(self, fig):
-        """Display matplotlib figure in tkinter"""
-        # Clear previous plot
+        # Graph ko display karo
+        # Pehle se jo graph hai wo clear karo
         for widget in self.viz_frame.winfo_children():
             widget.destroy()
         
-        # Create canvas
         canvas = FigureCanvasTkAgg(fig, master=self.viz_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         
-        # Switch to visualization tab
+        # Visualization tab par switch karo
         self.notebook.select(self.viz_frame)
     
     def clear_visualization(self):
-        """Clear all visualizations"""
+        # Saari visualizations clear kar do
         for widget in self.viz_frame.winfo_children():
             widget.destroy()
         
@@ -943,9 +919,8 @@ class GDPDashboard:
         messagebox.showinfo("Info", "Visualization cleared")
     
     def export_analysis(self):
-        """Export current analysis to file"""
+        # Current analysis ko file mein save karo
         try:
-            # Export statistics to text file
             stats_content = self.stats_text.get(1.0, tk.END)
             
             if stats_content.strip():
@@ -960,9 +935,8 @@ class GDPDashboard:
             messagebox.showerror("Error", f"Export failed: {str(e)}")
     
     def show_default_analysis(self):
-        """Show a default visualization on startup"""
+        # Dashboard khulte hi pehli country ka graph dikha do
         try:
-            # Automatically run the default analysis (country trend for first country)
             self.perform_analysis()
         except Exception as e:
             print(f"Could not load default visualization: {e}")
