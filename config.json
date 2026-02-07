@@ -1,0 +1,72 @@
+{
+  "data": {
+    "file_path": "gdp_with_continent_filled.xlsx",
+    "required_columns": ["Country Name", "Continent"],
+    "export_file": "gdp_analysis_report.txt"
+  },
+  "ui": {
+    "window_width": 1400,
+    "window_height": 900,
+    "title": "GDP Analysis Dashboard",
+    "title_emoji": "🌍 GDP Analysis Dashboard 📊",
+    "title_bar_height": 80,
+    "left_panel_width": 350,
+    "default_top_n": 10,
+    "max_compare_countries": 10,
+    "max_correlation_countries": 15,
+    "update_delay_ms": 300
+  },
+  "colors": {
+    "primary": "#3498db",
+    "success": "#2ecc71",
+    "danger": "#e74c3c",
+    "dark": "#2c3e50",
+    "light_bg": "#f0f0f0",
+    "white": "white",
+    "section_bg": "#ecf0f1"
+  },
+  "analysis_types": [
+    {
+      "name": "Country GDP Trend",
+      "value": "country_trend"
+    },
+    {
+      "name": "Compare Countries",
+      "value": "compare_countries"
+    },
+    {
+      "name": "Continent Analysis",
+      "value": "continent_analysis"
+    },
+    {
+      "name": "Top Countries",
+      "value": "top_countries"
+    },
+    {
+      "name": "GDP Growth Rate",
+      "value": "growth_rate"
+    },
+    {
+      "name": "Statistical Summary",
+      "value": "statistics"
+    },
+    {
+      "name": "Year Comparison",
+      "value": "year_comparison"
+    },
+    {
+      "name": "Correlation Analysis",
+      "value": "correlation"
+    }
+  ],
+  "visualization": {
+    "figure_size": [12, 6],
+    "figure_size_large": [14, 10],
+    "figure_size_tall": [12, 8],
+    "correlation_figure_size": [12, 10],
+    "style": "whitegrid",
+    "max_years_rotation": 20,
+    "max_comparison_years": 6,
+    "histogram_bins": 20
+  }
+}
