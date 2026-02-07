@@ -1,8 +1,6 @@
 # GDP Analysis Dashboard
 # Mulkon aur continents ka GDP data analyze karne ke liye
 
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -10,103 +8,116 @@ from matplotlib.figure import Figure
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import warnings
+import numpy as np
+
+from data_loader import ConfigLoader, GDPDataLoader
+from data_processor import GDPDataProcessor
 
 warnings.filterwarnings('ignore')
-
-WINDOW_WIDTH = 1400
-WINDOW_HEIGHT = 900
-TITLE_BAR_HEIGHT = 80
-LEFT_PANEL_WIDTH = 350
-MAX_COMPARE_COUNTRIES = 10
-MAX_CORRELATION_COUNTRIES = 15
-DEFAULT_TOP_N = 10
-UPDATE_DELAY_MS = 300
-DATA_FILE = 'gdp_with_continent_filled.xlsx'
-
-COLOR_PRIMARY = '#3498db'
-COLOR_SUCCESS = '#2ecc71'
-COLOR_DANGER = '#e74c3c'
-COLOR_DARK = '#2c3e50'
-COLOR_LIGHT_BG = '#f0f0f0'
-COLOR_WHITE = 'white'
-COLOR_SECTION_BG = '#ecf0f1'
-
-sns.set_style("whitegrid")
-plt.rcParams['figure.figsize'] = (12, 6)
 
 
 class GDPDashboard:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("GDP Analysis Dashboard")
-        self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
-        self.root.configure(bg=COLOR_LIGHT_BG)
         
-        self.load_data()
+        # Load configuration
+        try:
+            self.config = ConfigLoader()
+        except Exception as e:
+            messagebox.showerror("Configuration Error", str(e))
+            root.destroy()
+            return
+        
+        # Setup UI from config
+        ui_config = self.config.get('ui')
+        self.root.title(ui_config['title'])
+        self.root.geometry(f"{ui_config['window_width']}x{ui_config['window_height']}")
+        self.root.configure(bg=self.config.get('colors', 'light_bg'))
+        
+        # Apply visualization settings
+        viz_config = self.config.get('visualization')
+        sns.set_style(viz_config['style'])
+        plt.rcParams['figure.figsize'] = viz_config['figure_size']
+        
+        # Load data
+        try:
+            data_loader = GDPDataLoader(self.config)
+            data_loader.load_data()
+            
+            # Get data components
+            self.df = data_loader.get_dataframe()
+            self.year_columns = data_loader.get_year_columns()
+            self.countries = data_loader.get_countries()
+            self.continents = data_loader.get_continents()
+            
+            # Initialize data processor
+            self.processor = GDPDataProcessor(self.df, self.year_columns)
+            
+            # Print data summary
+            summary = data_loader.get_summary()
+            print(f"Data loaded: {summary['total_countries']} countries, {summary['total_years']} years")
+            
+        except Exception as e:
+            messagebox.showerror("Data Loading Error", str(e))
+            root.destroy()
+            return
+        
         self.create_widgets()
         
         # Shuru mein ek default graph dikhao
         self.root.after(100, self.show_default_analysis)
-        
-    def load_data(self):
-        # Excel file se data load karo
-        try:
-            self.df = pd.read_excel(DATA_FILE)
-            
-            # Year columns nikalo
-            self.year_columns = [col for col in self.df.columns if isinstance(col, int)]
-            self.year_columns.sort()
-            
-            # Countries aur continents ki list banao
-            self.countries = sorted(self.df['Country Name'].unique())
-            self.continents = sorted(self.df['Continent'].dropna().unique())
-            
-            print(f"Data loaded: {len(self.df)} countries, {len(self.year_columns)} years")
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load data: {str(e)}")
-            self.root.destroy()
     
     def create_widgets(self):
         # Title bar banao
         self._create_title_bar()
         
-        main_container = tk.Frame(self.root, bg=COLOR_LIGHT_BG)
+        colors = self.config.get('colors')
+        ui_config = self.config.get('ui')
+        
+        main_container = tk.Frame(self.root, bg=colors['light_bg'])
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         # Baayi taraf control panel
-        left_panel = tk.Frame(main_container, bg=COLOR_WHITE, width=LEFT_PANEL_WIDTH, 
+        left_panel = tk.Frame(main_container, bg=colors['white'], 
+                             width=ui_config['left_panel_width'], 
                              relief=tk.RAISED, borderwidth=2)
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, padx=(0, 10), pady=5)
         left_panel.pack_propagate(False)
         
         # Daahini taraf visualization panel
-        right_panel = tk.Frame(main_container, bg=COLOR_WHITE, relief=tk.RAISED, borderwidth=2)
+        right_panel = tk.Frame(main_container, bg=colors['white'], 
+                              relief=tk.RAISED, borderwidth=2)
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, pady=5)
         
         self.create_control_panel(left_panel)
         self.create_visualization_panel(right_panel)
     
     def _create_title_bar(self):
-        title_frame = tk.Frame(self.root, bg=COLOR_DARK, height=TITLE_BAR_HEIGHT)
+        colors = self.config.get('colors')
+        ui_config = self.config.get('ui')
+        
+        title_frame = tk.Frame(self.root, bg=colors['dark'], 
+                              height=ui_config['title_bar_height'])
         title_frame.pack(fill=tk.X, padx=10, pady=10)
         title_frame.pack_propagate(False)
         
         title_label = tk.Label(
             title_frame, 
-            text="🌍 GDP Analysis Dashboard 📊", 
+            text=ui_config['title_emoji'], 
             font=('Arial', 24, 'bold'),
-            bg=COLOR_DARK,
-            fg=COLOR_WHITE
+            bg=colors['dark'],
+            fg=colors['white']
         )
         title_label.pack(expand=True)
     
     def create_control_panel(self, parent):
+        colors = self.config.get('colors')
+        
         # Scrollable frame banao controls ke liye
-        canvas = tk.Canvas(parent, bg=COLOR_WHITE, highlightthickness=0)
+        canvas = tk.Canvas(parent, bg=colors['white'], highlightthickness=0)
         scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=COLOR_WHITE)
+        scrollable_frame = tk.Frame(canvas, bg=colors['white'])
         
         scrollable_frame.bind(
             "<Configure>",
@@ -143,33 +154,28 @@ class GDPDashboard:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
     
     def _create_analysis_type_options(self, parent):
-        self.analysis_type = tk.StringVar(value="country_trend")
-        analyses = [
-            ("Country GDP Trend", "country_trend"),
-            ("Compare Countries", "compare_countries"),
-            ("Continent Analysis", "continent_analysis"),
-            ("Top Countries", "top_countries"),
-            ("GDP Growth Rate", "growth_rate"),
-            ("Statistical Summary", "statistics"),
-            ("Year Comparison", "year_comparison"),
-            ("Correlation Analysis", "correlation")
-        ]
+        colors = self.config.get('colors')
+        analyses = self.config.get('analysis_types')
         
-        for text, value in analyses:
+        self.analysis_type = tk.StringVar(value=analyses[0]['value'])
+        
+        for analysis in analyses:
             rb = tk.Radiobutton(
                 parent,
-                text=text,
+                text=analysis['name'],
                 variable=self.analysis_type,
-                value=value,
-                bg=COLOR_WHITE,
+                value=analysis['value'],
+                bg=colors['white'],
                 font=('Arial', 10),
                 command=self.on_analysis_change
             )
             rb.pack(anchor=tk.W, padx=20, pady=2)
     
     def _create_country_selection(self, parent):
+        colors = self.config.get('colors')
+        
         # Pehla country dropdown
-        tk.Label(parent, text="Primary Country:", bg=COLOR_WHITE, 
+        tk.Label(parent, text="Primary Country:", bg=colors['white'], 
                 font=('Arial', 9, 'bold')).pack(anchor=tk.W, padx=20, pady=(5, 2))
         self.country_var = tk.StringVar(value=self.countries[0])
         country_combo = ttk.Combobox(parent, textvariable=self.country_var, 
@@ -178,10 +184,10 @@ class GDPDashboard:
         country_combo.bind('<<ComboboxSelected>>', lambda e: self.on_primary_country_change())
         
         # Compare karne ke liye countries ki list
-        tk.Label(parent, text="Compare With:", bg=COLOR_WHITE, 
+        tk.Label(parent, text="Compare With:", bg=colors['white'], 
                 font=('Arial', 9, 'bold')).pack(anchor=tk.W, padx=20, pady=(5, 2))
         
-        compare_frame = tk.Frame(parent, bg=COLOR_WHITE)
+        compare_frame = tk.Frame(parent, bg=colors['white'])
         compare_frame.pack(padx=20, pady=(0, 10), fill=tk.X)
         
         self.compare_listbox = tk.Listbox(compare_frame, height=4, selectmode=tk.MULTIPLE, 
@@ -198,6 +204,8 @@ class GDPDashboard:
         self.compare_listbox.bind('<<ListboxSelect>>', lambda e: self.on_compare_selection_change())
     
     def _create_continent_selection(self, parent):
+        colors = self.config.get('colors')
+        
         self.continent_var = tk.StringVar(value=self.continents[0] if self.continents else "")
         continent_combo = ttk.Combobox(parent, textvariable=self.continent_var, 
                                       values=self.continents, width=30, state='readonly')
@@ -205,10 +213,12 @@ class GDPDashboard:
         continent_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
     
     def _create_year_range_selection(self, parent):
-        year_frame = tk.Frame(parent, bg=COLOR_WHITE)
+        colors = self.config.get('colors')
+        
+        year_frame = tk.Frame(parent, bg=colors['white'])
         year_frame.pack(padx=20, pady=(0, 10), fill=tk.X)
         
-        tk.Label(year_frame, text="From:", bg=COLOR_WHITE, font=('Arial', 9)).grid(
+        tk.Label(year_frame, text="From:", bg=colors['white'], font=('Arial', 9)).grid(
             row=0, column=0, sticky=tk.W, padx=(0, 5))
         self.start_year_var = tk.StringVar(value=str(self.year_columns[0]))
         start_year_combo = ttk.Combobox(year_frame, textvariable=self.start_year_var, 
@@ -217,7 +227,7 @@ class GDPDashboard:
         start_year_combo.grid(row=0, column=1, padx=(0, 10))
         start_year_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
         
-        tk.Label(year_frame, text="To:", bg=COLOR_WHITE, font=('Arial', 9)).grid(
+        tk.Label(year_frame, text="To:", bg=colors['white'], font=('Arial', 9)).grid(
             row=0, column=2, sticky=tk.W, padx=(0, 5))
         self.end_year_var = tk.StringVar(value=str(self.year_columns[-1]))
         end_year_combo = ttk.Combobox(year_frame, textvariable=self.end_year_var, 
@@ -227,26 +237,31 @@ class GDPDashboard:
         end_year_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
     
     def _create_top_n_selection(self, parent):
-        top_frame = tk.Frame(parent, bg=COLOR_WHITE)
+        colors = self.config.get('colors')
+        ui_config = self.config.get('ui')
+        
+        top_frame = tk.Frame(parent, bg=colors['white'])
         top_frame.pack(padx=20, pady=(0, 10), fill=tk.X)
         
-        tk.Label(top_frame, text="Top N:", bg=COLOR_WHITE, font=('Arial', 9)).pack(
+        tk.Label(top_frame, text="Top N:", bg=colors['white'], font=('Arial', 9)).pack(
             side=tk.LEFT, padx=(0, 10))
-        self.top_n_var = tk.IntVar(value=DEFAULT_TOP_N)
+        self.top_n_var = tk.IntVar(value=ui_config['default_top_n'])
         top_n_spinner = tk.Spinbox(top_frame, from_=5, to=50, textvariable=self.top_n_var, 
                                   width=10, command=self.on_selection_change)
         top_n_spinner.pack(side=tk.LEFT)
     
     def _create_action_buttons(self, parent):
-        button_frame = tk.Frame(parent, bg=COLOR_WHITE)
+        colors = self.config.get('colors')
+        
+        button_frame = tk.Frame(parent, bg=colors['white'])
         button_frame.pack(pady=20, padx=20, fill=tk.X)
         
         analyze_btn = tk.Button(
             button_frame,
             text="🔍 Analyze",
             command=self.perform_analysis,
-            bg=COLOR_PRIMARY,
-            fg=COLOR_WHITE,
+            bg=colors['primary'],
+            fg=colors['white'],
             font=('Arial', 12, 'bold'),
             relief=tk.RAISED,
             borderwidth=3,
@@ -258,8 +273,8 @@ class GDPDashboard:
             button_frame,
             text="💾 Export Data",
             command=self.export_analysis,
-            bg=COLOR_SUCCESS,
-            fg=COLOR_WHITE,
+            bg=colors['success'],
+            fg=colors['white'],
             font=('Arial', 11, 'bold'),
             relief=tk.RAISED,
             borderwidth=2,
@@ -271,8 +286,8 @@ class GDPDashboard:
             button_frame,
             text="🗑️ Clear",
             command=self.clear_visualization,
-            bg=COLOR_DANGER,
-            fg=COLOR_WHITE,
+            bg=colors['danger'],
+            fg=colors['white'],
             font=('Arial', 11, 'bold'),
             relief=tk.RAISED,
             borderwidth=2,
@@ -281,26 +296,30 @@ class GDPDashboard:
         clear_btn.pack(fill=tk.X, pady=5)
     
     def create_section_header(self, parent, text):
+        colors = self.config.get('colors')
+        
         # Section header banao
-        frame = tk.Frame(parent, bg=COLOR_SECTION_BG, height=35)
+        frame = tk.Frame(parent, bg=colors['section_bg'], height=35)
         frame.pack(fill=tk.X, padx=15, pady=(15, 5))
         frame.pack_propagate(False)
         
-        label = tk.Label(frame, text=text, bg=COLOR_SECTION_BG, 
-                        font=('Arial', 11, 'bold'), fg=COLOR_DARK)
+        label = tk.Label(frame, text=text, bg=colors['section_bg'], 
+                        font=('Arial', 11, 'bold'), fg=colors['dark'])
         label.pack(anchor=tk.W, padx=10, pady=5)
     
     def create_visualization_panel(self, parent):
+        colors = self.config.get('colors')
+        
         # Visualization panel mein tabs banao
         self.notebook = ttk.Notebook(parent)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Pehla tab - graphs ke liye
-        self.viz_frame = tk.Frame(self.notebook, bg=COLOR_WHITE)
+        self.viz_frame = tk.Frame(self.notebook, bg=colors['white'])
         self.notebook.add(self.viz_frame, text="📊 Visualization")
         
         # Dusra tab - statistics ke liye
-        self.stats_frame = tk.Frame(self.notebook, bg=COLOR_WHITE)
+        self.stats_frame = tk.Frame(self.notebook, bg=colors['white'])
         self.notebook.add(self.stats_frame, text="📋 Statistics")
         
         # Stats text area
@@ -320,7 +339,8 @@ class GDPDashboard:
     
     def on_primary_country_change(self):
         # Jab primary country change ho
-        if self.analysis_type.get() in ["country_trend", "compare_countries", "growth_rate"]:
+        analysis_types_with_country = ["country_trend", "compare_countries", "growth_rate"]
+        if self.analysis_type.get() in analysis_types_with_country:
             self.analysis_type.set("country_trend")
         self.compare_listbox.selection_clear(0, tk.END)
         self.perform_analysis_delayed()
@@ -338,9 +358,10 @@ class GDPDashboard:
     
     def perform_analysis_delayed(self):
         # Thoda delay kar ke analysis chalaao taake bahut zyada updates na hon
+        ui_config = self.config.get('ui')
         if hasattr(self, '_update_timer'):
             self.root.after_cancel(self._update_timer)
-        self._update_timer = self.root.after(UPDATE_DELAY_MS, self.perform_analysis)
+        self._update_timer = self.root.after(ui_config['update_delay_ms'], self.perform_analysis)
     
     def get_year_range(self):
         # Selected year range nikalo
@@ -351,24 +372,6 @@ class GDPDashboard:
             start_year, end_year = end_year, start_year
             
         return [y for y in self.year_columns if start_year <= y <= end_year]
-    
-    def _get_country_data(self, country, years):
-        country_data = self.df[self.df['Country Name'] == country]
-        if country_data.empty:
-            return None
-        return country_data[years].values.flatten()
-    
-    def _calculate_growth_rates(self, gdp_values, years):
-        growth_rates = []
-        growth_years = []
-        
-        for i in range(1, len(gdp_values)):
-            if not np.isnan(gdp_values[i]) and not np.isnan(gdp_values[i-1]) and gdp_values[i-1] != 0:
-                growth_rate = ((gdp_values[i] - gdp_values[i-1]) / gdp_values[i-1]) * 100
-                growth_rates.append(growth_rate)
-                growth_years.append(years[i])
-        
-        return growth_rates, growth_years
     
     def perform_analysis(self):
         # Jo analysis select hai wo chalaao
@@ -390,7 +393,7 @@ class GDPDashboard:
             if analysis_function:
                 analysis_function()
         except Exception as e:
-            messagebox.showerror("Error", f"Analysis failed: {str(e)}")
+            messagebox.showerror("Analysis Error", f"Analysis failed: {str(e)}")
             print(f"Error details: {e}")
     
     def plot_country_trend(self):
@@ -398,16 +401,19 @@ class GDPDashboard:
         country = self.country_var.get()
         years = self.get_year_range()
         
-        gdp_values = self._get_country_data(country, years)
+        gdp_values = self.processor.get_country_data(country, years)
         if gdp_values is None:
             messagebox.showwarning("Warning", f"No data found for {country}")
             return
         
+        colors = self.config.get('colors')
+        viz_config = self.config.get('visualization')
+        
         # Graph banao
-        fig = Figure(figsize=(12, 6))
+        fig = Figure(figsize=tuple(viz_config['figure_size']))
         ax = fig.add_subplot(111)
         
-        ax.plot(years, gdp_values, marker='o', linewidth=2, markersize=4, color=COLOR_PRIMARY)
+        ax.plot(years, gdp_values, marker='o', linewidth=2, markersize=4, color=colors['primary'])
         ax.set_xlabel('Year', fontsize=12, fontweight='bold')
         ax.set_ylabel('GDP (USD)', fontsize=12, fontweight='bold')
         ax.set_title(f'GDP Trend: {country}', fontsize=14, fontweight='bold')
@@ -415,7 +421,7 @@ class GDPDashboard:
         ax.ticklabel_format(style='plain', axis='y')
         
         # Agar bahut zyada years hain to labels ghumao
-        if len(years) > 20:
+        if len(years) > viz_config['max_years_rotation']:
             ax.tick_params(axis='x', rotation=45)
         
         fig.tight_layout()
@@ -437,20 +443,23 @@ class GDPDashboard:
             if country != primary_country:
                 countries.append(country)
         
-        if len(countries) > MAX_COMPARE_COUNTRIES:
+        ui_config = self.config.get('ui')
+        if len(countries) > ui_config['max_compare_countries']:
             messagebox.showwarning("Warning", 
-                f"Please select maximum {MAX_COMPARE_COUNTRIES - 1} countries to compare with primary country")
+                f"Please select maximum {ui_config['max_compare_countries'] - 1} countries to compare with primary country")
             return
             
         years = self.get_year_range()
+        colors_config = self.config.get('colors')
+        viz_config = self.config.get('visualization')
         
-        fig = Figure(figsize=(12, 6))
+        fig = Figure(figsize=tuple(viz_config['figure_size']))
         ax = fig.add_subplot(111)
         
         colors = plt.cm.tab10(np.linspace(0, 1, len(countries)))
         
         for idx, country in enumerate(countries):
-            gdp_values = self._get_country_data(country, years)
+            gdp_values = self.processor.get_country_data(country, years)
             if gdp_values is not None:
                 # Primary country ko thicker line aur larger marker se dikhao
                 if country == primary_country:
@@ -467,7 +476,7 @@ class GDPDashboard:
         ax.grid(True, alpha=0.3)
         ax.ticklabel_format(style='plain', axis='y')
         
-        if len(years) > 20:
+        if len(years) > viz_config['max_years_rotation']:
             ax.tick_params(axis='x', rotation=45)
         
         fig.tight_layout()
@@ -480,18 +489,22 @@ class GDPDashboard:
         continent = self.continent_var.get()
         years = self.get_year_range()
         
-        continent_data = self.df[self.df['Continent'] == continent]
+        continent_data = self.processor.get_continent_data(continent)
         if continent_data.empty:
             messagebox.showwarning("Warning", f"No data found for {continent}")
             return
         
+        ui_config = self.config.get('ui')
+        colors = self.config.get('colors')
+        viz_config = self.config.get('visualization')
+        
         # Multiple subplots banao
-        fig = Figure(figsize=(14, 10))
+        fig = Figure(figsize=tuple(viz_config['figure_size_large']))
         
         # Plot 1: Total GDP trend
         ax1 = fig.add_subplot(221)
-        total_gdp = continent_data[years].sum()
-        ax1.plot(years, total_gdp.values, marker='o', linewidth=2, color=COLOR_SUCCESS)
+        total_gdp = self.processor.calculate_total_gdp(continent_data, years)
+        ax1.plot(years, total_gdp.values, marker='o', linewidth=2, color=colors['success'])
         ax1.set_title(f'Total GDP Trend: {continent}', fontweight='bold')
         ax1.set_xlabel('Year')
         ax1.set_ylabel('Total GDP (USD)')
@@ -501,31 +514,31 @@ class GDPDashboard:
         # Plot 2: Top countries in latest year
         ax2 = fig.add_subplot(222)
         latest_year = years[-1]
-        top_countries = continent_data.nlargest(DEFAULT_TOP_N, latest_year)
+        top_countries = continent_data.nlargest(ui_config['default_top_n'], latest_year)
         countries_list = top_countries['Country Name'].values
         gdp_list = top_countries[latest_year].values
         
-        bars = ax2.barh(countries_list, gdp_list, color=COLOR_PRIMARY)
-        ax2.set_title(f'Top {DEFAULT_TOP_N} Countries in {latest_year}', fontweight='bold')
+        ax2.barh(countries_list, gdp_list, color=colors['primary'])
+        ax2.set_title(f"Top {ui_config['default_top_n']} Countries in {latest_year}", fontweight='bold')
         ax2.set_xlabel('GDP (USD)')
         ax2.ticklabel_format(style='plain', axis='x')
         
         # Plot 3: Average GDP by country
         ax3 = fig.add_subplot(223)
-        avg_gdp = continent_data[years].mean(axis=1)
+        avg_gdp = self.processor.calculate_average_gdp(continent_data, years)
         continent_data_with_avg = continent_data.copy()
         continent_data_with_avg['avg_gdp'] = avg_gdp
-        top_avg = continent_data_with_avg.nlargest(DEFAULT_TOP_N, 'avg_gdp')
+        top_avg = continent_data_with_avg.nlargest(ui_config['default_top_n'], 'avg_gdp')
         
-        ax3.barh(top_avg['Country Name'].values, top_avg['avg_gdp'].values, color=COLOR_DANGER)
-        ax3.set_title(f'Top {DEFAULT_TOP_N} by Average GDP ({years[0]}-{years[-1]})', fontweight='bold')
+        ax3.barh(top_avg['Country Name'].values, top_avg['avg_gdp'].values, color=colors['danger'])
+        ax3.set_title(f"Top {ui_config['default_top_n']} by Average GDP ({years[0]}-{years[-1]})", fontweight='bold')
         ax3.set_xlabel('Average GDP (USD)')
         ax3.ticklabel_format(style='plain', axis='x')
         
         # Plot 4: GDP distribution
         ax4 = fig.add_subplot(224)
         latest_gdp = continent_data[latest_year].dropna()
-        ax4.hist(latest_gdp, bins=20, color='#9b59b6', edgecolor='black', alpha=0.7)
+        ax4.hist(latest_gdp, bins=viz_config['histogram_bins'], color='#9b59b6', edgecolor='black', alpha=0.7)
         ax4.set_title(f'GDP Distribution in {latest_year}', fontweight='bold')
         ax4.set_xlabel('GDP (USD)')
         ax4.set_ylabel('Number of Countries')
@@ -542,9 +555,10 @@ class GDPDashboard:
         years = self.get_year_range()
         latest_year = years[-1]
         
-        top_countries = self.df.nlargest(top_n, latest_year)
+        top_countries = self.processor.get_top_countries(latest_year, top_n)
         
-        fig = Figure(figsize=(12, 8))
+        viz_config = self.config.get('visualization')
+        fig = Figure(figsize=tuple(viz_config['figure_size_tall']))
         ax = fig.add_subplot(111)
         
         countries_list = top_countries['Country Name'].values
@@ -577,19 +591,22 @@ class GDPDashboard:
             messagebox.showwarning("Warning", "Need at least 2 years for growth rate calculation")
             return
         
-        gdp_values = self._get_country_data(country, years)
+        gdp_values = self.processor.get_country_data(country, years)
         if gdp_values is None:
             messagebox.showwarning("Warning", f"No data found for {country}")
             return
         
         # Growth rates calculate karo
-        growth_rates, growth_years = self._calculate_growth_rates(gdp_values, years)
+        growth_rates, growth_years = self.processor.calculate_growth_rates(gdp_values, years)
+        
+        colors_config = self.config.get('colors')
+        viz_config = self.config.get('visualization')
         
         # Graph banao
-        fig = Figure(figsize=(12, 6))
+        fig = Figure(figsize=tuple(viz_config['figure_size']))
         ax = fig.add_subplot(111)
         
-        colors = [COLOR_SUCCESS if gr >= 0 else COLOR_DANGER for gr in growth_rates]
+        colors = [colors_config['success'] if gr >= 0 else colors_config['danger'] for gr in growth_rates]
         ax.bar(growth_years, growth_rates, color=colors, alpha=0.7, edgecolor='black')
         ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
         ax.set_xlabel('Year', fontsize=12, fontweight='bold')
@@ -597,7 +614,7 @@ class GDPDashboard:
         ax.set_title(f'GDP Growth Rate: {country}', fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.3, axis='y')
         
-        if len(growth_years) > 20:
+        if len(growth_years) > viz_config['max_years_rotation']:
             ax.tick_params(axis='x', rotation=45)
         
         fig.tight_layout()
@@ -609,15 +626,17 @@ class GDPDashboard:
         # Alag alag years mein continents ka comparison
         years = self.get_year_range()
         
+        viz_config = self.config.get('visualization')
+        
         # Select evenly spaced years for comparison
-        max_comparison_years = 6
-        if len(years) > max_comparison_years:
-            step = len(years) // max_comparison_years
-            comparison_years = years[::step][:max_comparison_years]
+        max_years = viz_config['max_comparison_years']
+        if len(years) > max_years:
+            step = len(years) // max_years
+            comparison_years = years[::step][:max_years]
         else:
             comparison_years = years
         
-        fig = Figure(figsize=(14, 8))
+        fig = Figure(figsize=tuple(viz_config['figure_size_large']))
         ax = fig.add_subplot(111)
         
         x = np.arange(len(self.continents))
@@ -625,12 +644,10 @@ class GDPDashboard:
         
         colors = plt.cm.Set3(np.linspace(0, 1, len(comparison_years)))
         
+        comparison_data = self.processor.get_year_comparison_data(comparison_years, self.continents)
+        
         for idx, year in enumerate(comparison_years):
-            continent_gdp = []
-            for continent in self.continents:
-                continent_data = self.df[self.df['Continent'] == continent]
-                total_gdp = continent_data[year].sum()
-                continent_gdp.append(total_gdp)
+            continent_gdp = [comparison_data[year][continent] for continent in self.continents]
             
             offset = (idx - len(comparison_years)/2) * width + width/2
             ax.bar(x + offset, continent_gdp, width, label=str(year), color=colors[idx])
@@ -651,29 +668,29 @@ class GDPDashboard:
     
     def plot_correlation(self):
         selected_indices = self.compare_listbox.curselection()
+        
+        ui_config = self.config.get('ui')
         if len(selected_indices) < 2:
             messagebox.showwarning("Warning", "Please select at least 2 countries for correlation analysis")
             return
         
-        if len(selected_indices) > MAX_CORRELATION_COUNTRIES:
+        if len(selected_indices) > ui_config['max_correlation_countries']:
             messagebox.showwarning("Warning", 
-                f"Please select maximum {MAX_CORRELATION_COUNTRIES} countries for better visualization")
+                f"Please select maximum {ui_config['max_correlation_countries']} countries for better visualization")
             return
             
         countries = [self.compare_listbox.get(i) for i in selected_indices]
         years = self.get_year_range()
         
         # Build correlation matrix
-        data_dict = {}
-        for country in countries:
-            gdp_values = self._get_country_data(country, years)
-            if gdp_values is not None:
-                data_dict[country] = gdp_values
+        correlation_matrix = self.processor.get_correlation_matrix(countries, years)
         
-        corr_df = pd.DataFrame(data_dict)
-        correlation_matrix = corr_df.corr()
+        if correlation_matrix is None:
+            messagebox.showwarning("Warning", "Could not build correlation matrix")
+            return
         
-        fig = Figure(figsize=(12, 10))
+        viz_config = self.config.get('visualization')
+        fig = Figure(figsize=tuple(viz_config['correlation_figure_size']))
         ax = fig.add_subplot(111)
         
         im = ax.imshow(correlation_matrix, cmap='coolwarm', aspect='auto', vmin=-1, vmax=1)
@@ -688,8 +705,8 @@ class GDPDashboard:
         
         for i in range(len(countries)):
             for j in range(len(countries)):
-                text = ax.text(j, i, f'{correlation_matrix.iloc[i, j]:.2f}',
-                             ha="center", va="center", color="black", fontsize=7)
+                ax.text(j, i, f'{correlation_matrix.iloc[i, j]:.2f}',
+                       ha="center", va="center", color="black", fontsize=7)
         
         ax.set_title('GDP Correlation Matrix', fontsize=14, fontweight='bold', pad=20)
         
@@ -700,6 +717,10 @@ class GDPDashboard:
     
     def show_statistics(self):
         years = self.get_year_range()
+        latest_year = years[-1]
+        
+        ui_config = self.config.get('ui')
+        world_stats = self.processor.get_world_statistics(latest_year)
         
         stats_text = "=" * 80 + "\n"
         stats_text += " " * 25 + "GDP STATISTICAL SUMMARY\n"
@@ -711,22 +732,20 @@ class GDPDashboard:
         stats_text += f"Year Range: {years[0]} - {years[-1]}\n"
         stats_text += f"Total Years: {len(years)}\n\n"
         
-        latest_year = years[-1]
-        latest_data = self.df[latest_year].dropna()
-        
         stats_text += f"STATISTICS FOR {latest_year}\n"
         stats_text += "-" * 80 + "\n"
-        stats_text += f"Total World GDP: ${latest_data.sum():,.0f}\n"
-        stats_text += f"Average GDP: ${latest_data.mean():,.0f}\n"
-        stats_text += f"Median GDP: ${latest_data.median():,.0f}\n"
-        stats_text += f"Std Deviation: ${latest_data.std():,.0f}\n"
-        stats_text += f"Max GDP: ${latest_data.max():,.0f}\n"
-        stats_text += f"Min GDP: ${latest_data.min():,.0f}\n\n"
+        stats_text += f"Total World GDP: ${world_stats['total_gdp']:,.0f}\n"
+        stats_text += f"Average GDP: ${world_stats['avg_gdp']:,.0f}\n"
+        stats_text += f"Median GDP: ${world_stats['median_gdp']:,.0f}\n"
+        stats_text += f"Std Deviation: ${world_stats['std_gdp']:,.0f}\n"
+        stats_text += f"Max GDP: ${world_stats['max_gdp']:,.0f}\n"
+        stats_text += f"Min GDP: ${world_stats['min_gdp']:,.0f}\n\n"
         
-        top_10 = self.df.nlargest(DEFAULT_TOP_N, latest_year)
-        stats_text += f"TOP {DEFAULT_TOP_N} COUNTRIES IN {latest_year}\n"
+        top_n = ui_config['default_top_n']
+        top_countries = self.processor.get_top_countries(latest_year, top_n)
+        stats_text += f"TOP {top_n} COUNTRIES IN {latest_year}\n"
         stats_text += "-" * 80 + "\n"
-        for idx, row in enumerate(top_10.iterrows(), 1):
+        for idx, row in enumerate(top_countries.iterrows(), 1):
             country = row[1]['Country Name']
             gdp = row[1][latest_year]
             continent = row[1]['Continent']
@@ -740,11 +759,9 @@ class GDPDashboard:
         stats_text += "-" * 80 + "\n"
         
         for continent in self.continents:
-            continent_data = self.df[self.df['Continent'] == continent]
-            total = continent_data[latest_year].sum()
-            avg = continent_data[latest_year].mean()
-            count = len(continent_data)
-            stats_text += f"{continent:<20} ${total:<24,.0f} ${avg:<24,.0f} {count:<10}\n"
+            summary = self.processor.get_continent_summary(continent, latest_year)
+            if summary:
+                stats_text += f"{continent:<20} ${summary['total_gdp']:<24,.0f} ${summary['avg_gdp']:<24,.0f} {summary['country_count']:<10}\n"
         
         stats_text += "\n" + "=" * 80 + "\n"
         
@@ -753,32 +770,29 @@ class GDPDashboard:
         self.notebook.select(self.stats_frame)
     
     def show_country_statistics(self, country, years, gdp_values):
-        valid_gdp = [g for g in gdp_values if not np.isnan(g)]
+        stats = self.processor.calculate_statistics(gdp_values)
+        
+        if stats is None:
+            return
         
         stats_text = "=" * 80 + "\n"
         stats_text += f"STATISTICS FOR {country.upper()}\n"
         stats_text += "=" * 80 + "\n\n"
         
         stats_text += f"Period: {years[0]} - {years[-1]}\n"
-        stats_text += f"Data Points: {len(valid_gdp)} / {len(years)}\n\n"
+        stats_text += f"Data Points: {stats['count']} / {len(years)}\n\n"
         
-        if valid_gdp:
-            stats_text += f"Maximum GDP: ${max(valid_gdp):,.0f} (Year: {years[gdp_values.tolist().index(max(valid_gdp))]})\n"
-            stats_text += f"Minimum GDP: ${min(valid_gdp):,.0f} (Year: {years[gdp_values.tolist().index(min(valid_gdp))]})\n"
-            stats_text += f"Average GDP: ${np.mean(valid_gdp):,.0f}\n"
-            stats_text += f"Median GDP: ${np.median(valid_gdp):,.0f}\n"
-            stats_text += f"Std Deviation: ${np.std(valid_gdp):,.0f}\n\n"
-            
-            first_valid = next((g for g in gdp_values if not np.isnan(g)), None)
-            last_valid = next((g for g in reversed(gdp_values) if not np.isnan(g)), None)
-            
-            if first_valid and last_valid and first_valid != 0:
-                total_growth = ((last_valid - first_valid) / first_valid) * 100
-                stats_text += f"Total Growth: {total_growth:,.2f}%\n"
-                years_spanned = years[-1] - years[0]
-                if years_spanned > 0:
-                    avg_annual_growth = total_growth / years_spanned
-                    stats_text += f"Average Annual Growth: {avg_annual_growth:,.2f}%\n"
+        stats_text += f"Maximum GDP: ${stats['max']:,.0f} (Year: {years[gdp_values.tolist().index(stats['max'])]})\n"
+        stats_text += f"Minimum GDP: ${stats['min']:,.0f} (Year: {years[gdp_values.tolist().index(stats['min'])]})\n"
+        stats_text += f"Average GDP: ${stats['mean']:,.0f}\n"
+        stats_text += f"Median GDP: ${stats['median']:,.0f}\n"
+        stats_text += f"Std Deviation: ${stats['std']:,.0f}\n\n"
+        
+        growth_summary = self.processor.calculate_growth_summary(gdp_values, years)
+        if growth_summary:
+            stats_text += f"Total Growth: {growth_summary['total_growth']:,.2f}%\n"
+            if 'avg_annual_growth' in growth_summary:
+                stats_text += f"Average Annual Growth: {growth_summary['avg_annual_growth']:,.2f}%\n"
         
         stats_text += "\n" + "=" * 80 + "\n"
         
@@ -811,26 +825,25 @@ class GDPDashboard:
         self.stats_text.insert(1.0, stats_text)
     
     def show_continent_statistics(self, continent, years):
-        continent_data = self.df[self.df['Continent'] == continent]
         latest_year = years[-1]
+        summary = self.processor.get_continent_summary(continent, latest_year)
+        
+        if summary is None:
+            return
         
         stats_text = "=" * 80 + "\n"
         stats_text += f"STATISTICS FOR {continent.upper()}\n"
         stats_text += "=" * 80 + "\n\n"
         
         stats_text += f"Period: {years[0]} - {years[-1]}\n"
-        stats_text += f"Total Countries: {len(continent_data)}\n\n"
+        stats_text += f"Total Countries: {summary['country_count']}\n\n"
         
-        total_gdp = continent_data[latest_year].sum()
-        avg_gdp = continent_data[latest_year].mean()
+        stats_text += f"Total GDP ({latest_year}): ${summary['total_gdp']:,.0f}\n"
+        stats_text += f"Average GDP ({latest_year}): ${summary['avg_gdp']:,.0f}\n\n"
         
-        stats_text += f"Total GDP ({latest_year}): ${total_gdp:,.0f}\n"
-        stats_text += f"Average GDP ({latest_year}): ${avg_gdp:,.0f}\n\n"
-        
-        top_5 = continent_data.nlargest(5, latest_year)
         stats_text += f"TOP 5 COUNTRIES IN {latest_year}\n"
         stats_text += "-" * 80 + "\n"
-        for idx, row in enumerate(top_5.iterrows(), 1):
+        for idx, row in enumerate(summary['top_countries'].iterrows(), 1):
             country = row[1]['Country Name']
             gdp = row[1][latest_year]
             stats_text += f"{idx}. {country:<40} ${gdp:,.0f}\n"
@@ -902,11 +915,12 @@ class GDPDashboard:
             stats_text += f"{str(year):<15}"
         stats_text += "\n" + "-" * 80 + "\n"
         
+        comparison_data = self.processor.get_year_comparison_data(comparison_years, self.continents)
+        
         for continent in self.continents:
             stats_text += f"{continent:<20}"
-            continent_data = self.df[self.df['Continent'] == continent]
             for year in comparison_years:
-                total = continent_data[year].sum()
+                total = comparison_data[year][continent]
                 stats_text += f"${total/1e12:.2f}T"[:14] + " "
             stats_text += "\n"
         
@@ -920,18 +934,12 @@ class GDPDashboard:
         stats_text += "CORRELATION ANALYSIS\n"
         stats_text += "=" * 80 + "\n\n"
         
-        correlations = []
-        for i in range(len(countries)):
-            for j in range(i+1, len(countries)):
-                corr_value = correlation_matrix.iloc[i, j]
-                correlations.append((countries[i], countries[j], corr_value))
-        
-        correlations.sort(key=lambda x: abs(x[2]), reverse=True)
+        correlations = self.processor.get_top_correlations(correlation_matrix, 10)
         
         stats_text += "HIGHEST CORRELATIONS:\n"
         stats_text += "-" * 80 + "\n"
         
-        for i, (country1, country2, corr) in enumerate(correlations[:10], 1):
+        for i, (country1, country2, corr) in enumerate(correlations, 1):
             stats_text += f"{i:2d}. {country1:25s} <-> {country2:25s} : {corr:6.3f}\n"
         
         stats_text += "\n" + "=" * 80 + "\n"
@@ -967,10 +975,11 @@ class GDPDashboard:
             stats_content = self.stats_text.get(1.0, tk.END)
             
             if stats_content.strip():
-                with open('gdp_analysis_report.txt', 'w', encoding='utf-8') as f:
+                export_file = self.config.get('data', 'export_file')
+                with open(export_file, 'w', encoding='utf-8') as f:
                     f.write(stats_content)
                 
-                messagebox.showinfo("Success", "Analysis exported to: gdp_analysis_report.txt")
+                messagebox.showinfo("Success", f"Analysis exported to: {export_file}")
             else:
                 messagebox.showwarning("Warning", "No statistics to export. Run an analysis first.")
                 
