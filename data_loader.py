@@ -1,7 +1,6 @@
-"""
-Data Loader Module
-Handles loading GDP data from Excel files with validation.
-"""
+
+#Data Loader Module
+#Handles loading GDP data from Excel files with validation.
 
 import pandas as pd
 import json
