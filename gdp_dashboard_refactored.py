@@ -844,7 +844,6 @@ class GDPDashboard:
         self.show_country_statistics(country, years_int, country_data)
     
     def plot_phase1_complete_analysis(self):
-        """Complete analysis showing all 4 required chart types"""
         phase1_config = self.config.get('phase1_operations')
         if phase1_config:
             regions = phase1_config.get('compute_regions', self.continents[:5])
