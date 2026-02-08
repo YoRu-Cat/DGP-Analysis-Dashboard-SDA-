@@ -1,7 +1,6 @@
-"""
-Data Processor Module
-Handles all GDP data processing, calculations, and statistical operations.
-"""
+
+#Data Processor Module
+#Handles all GDP data processing, calculations, and statistical operations.
 
 import numpy as np
 import pandas as pd
