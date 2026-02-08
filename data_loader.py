@@ -65,19 +65,34 @@ class GDPDataLoader:
         self.continents = []
     
     def load_data(self):
-        """Load GDP data from Excel file"""
+        """Load GDP data from CSV or Excel file (smart format detection)"""
         file_path = self.config.get('data', 'file_path')
         
         if not os.path.exists(file_path):
             raise FileNotFoundError(
                 f"Data file not found: {file_path}\n"
-                f"Please ensure the Excel file exists in the project directory."
+                f"Please ensure the data file (CSV or Excel) exists in the project directory."
             )
         
+        # Smart format detection based on file extension
+        file_extension = os.path.splitext(file_path)[1].lower()
+        
         try:
-            self.df = pd.read_excel(file_path)
+            if file_extension == '.csv':
+                # Load CSV file
+                self.df = pd.read_csv(file_path)
+                print(f"Loaded CSV file: {file_path}")
+            elif file_extension in ['.xlsx', '.xls']:
+                # Load Excel file
+                self.df = pd.read_excel(file_path)
+                print(f"Loaded Excel file: {file_path}")
+            else:
+                raise ValueError(
+                    f"Unsupported file format: {file_extension}\n"
+                    f"Supported formats: .csv, .xlsx, .xls"
+                )
         except Exception as e:
-            raise Exception(f"Failed to read Excel file: {str(e)}")
+            raise Exception(f"Failed to read data file ({file_extension}): {str(e)}")
         
         self._validate_data()
         self._extract_metadata()
