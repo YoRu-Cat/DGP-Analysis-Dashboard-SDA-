@@ -53,7 +53,7 @@ pip install -r requirements.txt
 2. Run the application:
 
 ```bash
-python gdp_dashboard.py
+python gdp_dashboard_refactored.py
 ```
 
 ### Using the Dashboard
