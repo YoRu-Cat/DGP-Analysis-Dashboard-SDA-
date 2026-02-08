@@ -239,7 +239,6 @@ def main():
             break
         else:
             print("\nInvalid choice. Please try again.")
-        
         input("\nPress Enter to continue...")
 
 
