@@ -1,4 +1,32 @@
 {
+  "phase1_filters": {
+    "region": "Asia",
+    "year": "2020",
+    "country": "Pakistan"
+  },
+  "phase1_operations": {
+    "statistical_operation": "average",
+    "compute_regions": [
+      "Asia",
+      "Europe",
+      "Africa",
+      "North America",
+      "South America",
+      "Oceania"
+    ],
+    "compute_countries": [
+      "Pakistan",
+      "India",
+      "China",
+      "United States",
+      "Germany"
+    ]
+  },
+  "phase1_visualizations": {
+    "region_charts": ["pie", "bar"],
+    "year_charts": ["line", "scatter"],
+    "enable_histogram": true
+  },
   "data": {
     "file_path": "gdp_with_continent_filled.xlsx",
     "required_columns": ["Country Name", "Continent"],
@@ -57,6 +85,18 @@
     {
       "name": "Correlation Analysis",
       "value": "correlation"
+    },
+    {
+      "name": "Regional Analysis (Pie + Bar)",
+      "value": "phase1_regional"
+    },
+    {
+      "name": "Year Analysis (Line + Scatter)",
+      "value": "phase1_year"
+    },
+    {
+      "name": "Complete Analysis (All Charts)",
+      "value": "phase1_complete"
     }
   ],
   "visualization": {

@@ -6,6 +6,7 @@ Handles loading GDP data from Excel files with validation.
 import pandas as pd
 import json
 import os
+from functools import reduce
 
 
 class ConfigLoader:
@@ -36,16 +37,16 @@ class ConfigLoader:
         """Validate configuration structure"""
         required_sections = ['data', 'ui', 'colors', 'analysis_types', 'visualization']
         
-        for section in required_sections:
-            if section not in config:
-                raise ValueError(f"Missing required configuration section: {section}")
+        missing_sections = [section for section in required_sections if section not in config]
         
-        # Validate data section
-        if 'file_path' not in config['data']:
-            raise ValueError("Missing 'file_path' in data configuration")
+        if missing_sections:
+            raise ValueError(f"Missing required configuration section: {', '.join(missing_sections)}")
         
-        if 'required_columns' not in config['data']:
-            raise ValueError("Missing 'required_columns' in data configuration")
+        data_required = ['file_path', 'required_columns']
+        missing_data_fields = list(filter(lambda key: key not in config['data'], data_required))
+        
+        if missing_data_fields:
+            raise ValueError(f"Missing in data configuration: {', '.join(missing_data_fields)}")
     
     def get(self, section, key=None):
         """Get configuration value"""
@@ -105,13 +106,16 @@ class GDPDataLoader:
     
     def _extract_metadata(self):
         """Extract years, countries, and continents from data"""
-        # Year columns nikalo
-        self.year_columns = [col for col in self.df.columns if isinstance(col, int)]
-        self.year_columns.sort()
+        self.year_columns = sorted(
+            list(filter(lambda col: isinstance(col, int), self.df.columns))
+        )
         
-        # Countries aur continents ki list banao
-        self.countries = sorted(self.df['Country Name'].unique())
-        self.continents = sorted(self.df['Continent'].dropna().unique())
+        self.countries = sorted([
+            country for country in self.df['Country Name'].unique() if pd.notna(country)
+        ])
+        
+        continents_raw = self.df['Continent'].dropna().unique()
+        self.continents = sorted(list(map(str, filter(lambda x: pd.notna(x), continents_raw))))
         
         if not self.countries:
             raise ValueError("No countries found in data")

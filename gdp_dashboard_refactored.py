@@ -385,7 +385,10 @@ class GDPDashboard:
             "growth_rate": self.plot_growth_rate,
             "statistics": self.show_statistics,
             "year_comparison": self.plot_year_comparison,
-            "correlation": self.plot_correlation
+            "correlation": self.plot_correlation,
+            "phase1_regional": self.plot_phase1_regional_analysis,
+            "phase1_year": self.plot_phase1_year_analysis,
+            "phase1_complete": self.plot_phase1_complete_analysis
         }
         
         try:
@@ -714,6 +717,186 @@ class GDPDashboard:
         self.display_plot(fig)
         
         self.show_correlation_statistics(correlation_matrix, countries)
+    
+    def plot_phase1_regional_analysis(self):
+        """Regional GDP analysis with Pie and Bar charts"""
+        phase1_config = self.config.get('phase1_operations', {})
+        regions = phase1_config.get('compute_regions', self.continents)
+        
+        years = self.get_year_range()
+        latest_year = years[-1]
+        colors_config = self.config.get('colors')
+        viz_config = self.config.get('visualization')
+        
+        regional_gdps = list(map(
+            lambda region: (region, self.df[self.df['Continent'] == region][latest_year].sum()),
+            regions
+        ))
+        
+        valid_regions = list(filter(lambda x: x[1] > 0, regional_gdps))
+        
+        region_names = [r[0] for r in valid_regions]
+        gdp_values = [r[1] for r in valid_regions]
+        
+        fig = Figure(figsize=tuple(viz_config['figure_size_large']))
+        
+        ax1 = fig.add_subplot(121)
+        colors_pie = plt.cm.Set3(range(len(region_names)))
+        ax1.pie(gdp_values, labels=region_names, autopct='%1.1f%%', startangle=90, colors=colors_pie)
+        ax1.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold', fontsize=12)
+        
+        ax2 = fig.add_subplot(122)
+        bars = ax2.bar(region_names, gdp_values, color=plt.cm.viridis(np.linspace(0, 1, len(region_names))))
+        ax2.set_xlabel('Region', fontweight='bold')
+        ax2.set_ylabel('GDP (USD)', fontweight='bold')
+        ax2.set_title(f'Regional GDP Comparison ({latest_year})', fontweight='bold', fontsize=12)
+        ax2.tick_params(axis='x', rotation=45)
+        ax2.ticklabel_format(style='plain', axis='y')
+        
+        fig.tight_layout()
+        self.display_plot(fig)
+        
+        self.show_phase1_regional_statistics(region_names, gdp_values, latest_year)
+    
+    def plot_phase1_year_analysis(self):
+        """Year-specific GDP analysis with Line and Scatter plots"""
+        country = self.primary_country_var.get()
+        years = self.get_year_range()
+        years_int = [int(y) for y in years]
+        
+        country_data = self.processor.get_country_data(country, years)
+        
+        if country_data is None:
+            messagebox.showwarning("Warning", f"No data found for {country}")
+            return
+        
+        viz_config = self.config.get('visualization')
+        colors_config = self.config.get('colors')
+        
+        fig = Figure(figsize=tuple(viz_config['figure_size_large']))
+        
+        ax1 = fig.add_subplot(121)
+        ax1.plot(years_int, country_data, marker='o', linewidth=2, color=colors_config['primary'], label=country)
+        ax1.set_xlabel('Year', fontweight='bold')
+        ax1.set_ylabel('GDP (USD)', fontweight='bold')
+        ax1.set_title(f'{country} - GDP Trend Over Years', fontweight='bold', fontsize=12)
+        ax1.grid(True, alpha=0.3)
+        ax1.legend()
+        ax1.ticklabel_format(style='plain', axis='y')
+        
+        ax2 = fig.add_subplot(122)
+        colors_scatter = plt.cm.coolwarm(np.linspace(0, 1, len(years_int)))
+        ax2.scatter(years_int, country_data, c=colors_scatter, s=100, alpha=0.6, edgecolors='black')
+        ax2.set_xlabel('Year', fontweight='bold')
+        ax2.set_ylabel('GDP (USD)', fontweight='bold')
+        ax2.set_title(f'{country} - GDP Scatter Analysis', fontweight='bold', fontsize=12)
+        ax2.grid(True, alpha=0.3)
+        ax2.ticklabel_format(style='plain', axis='y')
+        
+        fig.tight_layout()
+        self.display_plot(fig)
+        
+        self.show_country_statistics(country, years_int, country_data)
+    
+    def plot_phase1_complete_analysis(self):
+        """Complete analysis showing all 4 required chart types"""
+        phase1_config = self.config.get('phase1_operations', {})
+        regions = phase1_config.get('compute_regions', self.continents[:5])
+        
+        country = self.primary_country_var.get()
+        years = self.get_year_range()
+        years_int = [int(y) for y in years]
+        latest_year = years[-1]
+        
+        viz_config = self.config.get('visualization')
+        colors_config = self.config.get('colors')
+        
+        fig = Figure(figsize=(14, 10))
+        
+        ax1 = fig.add_subplot(221)
+        regional_gdps = {region: self.df[self.df['Continent'] == region][latest_year].sum() for region in regions}
+        valid_regions = {k: v for k, v in regional_gdps.items() if v > 0}
+        
+        ax1.pie(valid_regions.values(), labels=valid_regions.keys(), autopct='%1.1f%%', startangle=90)
+        ax1.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold')
+        
+        ax2 = fig.add_subplot(222)
+        ax2.bar(valid_regions.keys(), valid_regions.values(), color=plt.cm.viridis(np.linspace(0, 1, len(valid_regions))))
+        ax2.set_xlabel('Region', fontweight='bold')
+        ax2.set_ylabel('GDP (USD)', fontweight='bold')
+        ax2.set_title(f'Regional GDP Bar Chart ({latest_year})', fontweight='bold')
+        ax2.tick_params(axis='x', rotation=45)
+        ax2.ticklabel_format(style='plain', axis='y')
+        
+        ax3 = fig.add_subplot(223)
+        country_data = self.processor.get_country_data(country, years)
+        if country_data is not None:
+            ax3.plot(years_int, country_data, marker='o', linewidth=2, color=colors_config['success'])
+            ax3.set_xlabel('Year', fontweight='bold')
+            ax3.set_ylabel('GDP (USD)', fontweight='bold')
+            ax3.set_title(f'{country} - Line Graph', fontweight='bold')
+            ax3.grid(True, alpha=0.3)
+            ax3.ticklabel_format(style='plain', axis='y')
+        
+        ax4 = fig.add_subplot(224)
+        if country_data is not None:
+            ax4.scatter(years_int, country_data, c=plt.cm.coolwarm(np.linspace(0, 1, len(years_int))), 
+                       s=100, alpha=0.6, edgecolors='black')
+            ax4.set_xlabel('Year', fontweight='bold')
+            ax4.set_ylabel('GDP (USD)', fontweight='bold')
+            ax4.set_title(f'{country} - Scatter Plot', fontweight='bold')
+            ax4.grid(True, alpha=0.3)
+            ax4.ticklabel_format(style='plain', axis='y')
+        
+        fig.tight_layout()
+        self.display_plot(fig)
+        
+        self.show_phase1_complete_statistics(regions, country, years_int, latest_year)
+    
+    def show_phase1_regional_statistics(self, region_names, gdp_values, year):
+        """Display regional statistics"""
+        self.stats_text.config(state=tk.NORMAL)
+        self.stats_text.delete(1.0, tk.END)
+        
+        from functools import reduce
+        total_gdp = reduce(lambda a, b: a + b, gdp_values, 0)
+        
+        percentages = list(map(lambda gdp: (gdp / total_gdp) * 100, gdp_values))
+        
+        stats = f"Regional GDP Analysis ({year})\n"
+        stats += "=" * 60 + "\n\n"
+        
+        for region, gdp, pct in zip(region_names, gdp_values, percentages):
+            stats += f"{region:20s}: ${gdp:,.0f} ({pct:.1f}%)\n"
+        
+        stats += "\n" + "-" * 60 + "\n"
+        stats += f"Total GDP: ${total_gdp:,.0f}\n"
+        stats += f"Average GDP: ${total_gdp / len(gdp_values):,.0f}\n"
+        
+        self.stats_text.insert(tk.END, stats)
+        self.stats_text.config(state=tk.DISABLED)
+    
+    def show_phase1_complete_statistics(self, regions, country, years, year):
+        """Display complete statistics"""
+        self.stats_text.config(state=tk.NORMAL)
+        self.stats_text.delete(1.0, tk.END)
+        
+        stats = "Complete GDP Analysis\n"
+        stats += "=" * 60 + "\n\n"
+        stats += f"Configuration:\n"
+        stats += f"  Selected Regions: {', '.join(regions)}\n"
+        stats += f"  Selected Country: {country}\n"
+        stats += f"  Year Range: {years[0]} - {years[-1]}\n"
+        stats += f"  Latest Year: {year}\n\n"
+        
+        stats += "Visualizations Generated:\n"
+        stats += "  ✓ Pie Chart - Regional GDP Distribution\n"
+        stats += "  ✓ Bar Chart - Regional GDP Comparison\n"
+        stats += "  ✓ Line Graph - Country GDP Trend\n"
+        stats += "  ✓ Scatter Plot - Country GDP Analysis\n\n"
+        
+        self.stats_text.insert(tk.END, stats)
+        self.stats_text.config(state=tk.DISABLED)
     
     def show_statistics(self):
         years = self.get_year_range()
