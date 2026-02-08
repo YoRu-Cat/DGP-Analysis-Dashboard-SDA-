@@ -339,10 +339,15 @@ class GDPDashboard:
     
     def on_primary_country_change(self):
         # Jab primary country change ho
-        analysis_types_with_country = ["country_trend", "compare_countries", "growth_rate"]
-        if self.analysis_type.get() in analysis_types_with_country:
+        analysis_types_with_country = ["country_trend", "compare_countries", "growth_rate", "statistics", "phase1_year", "phase1_complete"]
+        current_analysis = self.analysis_type.get()
+        
+        # If not already on a country-focused analysis, switch to country trend
+        if current_analysis not in analysis_types_with_country:
             self.analysis_type.set("country_trend")
-        self.compare_listbox.selection_clear(0, tk.END)
+        
+        # Don't clear compare listbox - allow user to select primary and compare countries
+        # self.compare_listbox.selection_clear(0, tk.END)
         self.perform_analysis_delayed()
     
     def on_compare_selection_change(self):
@@ -445,6 +450,13 @@ class GDPDashboard:
             country = self.compare_listbox.get(i)
             if country != primary_country:
                 countries.append(country)
+        
+        # Check if at least 2 countries are selected
+        if len(countries) < 2:
+            messagebox.showwarning("Selection Required", 
+                "Please select at least one country from the 'Compare Countries' list to compare with the primary country.\n\n"
+                "Tip: Hold Ctrl and click to select multiple countries.")
+            return
         
         ui_config = self.config.get('ui')
         if len(countries) > ui_config['max_compare_countries']:
@@ -670,19 +682,30 @@ class GDPDashboard:
         self.show_year_comparison_statistics(comparison_years)
     
     def plot_correlation(self):
+        primary_country = self.country_var.get()
         selected_indices = self.compare_listbox.curselection()
         
+        # Primary country ko list mein shuru mein daalo
+        countries = [primary_country]
+        
+        # Selected countries ko add karo (agar primary country already selected hai to skip karo)
+        for i in selected_indices:
+            country = self.compare_listbox.get(i)
+            if country != primary_country:
+                countries.append(country)
+        
         ui_config = self.config.get('ui')
-        if len(selected_indices) < 2:
-            messagebox.showwarning("Warning", "Please select at least 2 countries for correlation analysis")
+        if len(countries) < 2:
+            messagebox.showwarning("Selection Required", 
+                "Please select at least one country from the 'Compare Countries' list for correlation analysis with the primary country.\n\n"
+                "Tip: Hold Ctrl and click to select multiple countries.")
             return
         
-        if len(selected_indices) > ui_config['max_correlation_countries']:
+        if len(countries) > ui_config['max_correlation_countries']:
             messagebox.showwarning("Warning", 
-                f"Please select maximum {ui_config['max_correlation_countries']} countries for better visualization")
+                f"Please select maximum {ui_config['max_correlation_countries'] - 1} countries for better visualization")
             return
             
-        countries = [self.compare_listbox.get(i) for i in selected_indices]
         years = self.get_year_range()
         
         # Build correlation matrix
@@ -720,8 +743,11 @@ class GDPDashboard:
     
     def plot_phase1_regional_analysis(self):
         """Regional GDP analysis with Pie and Bar charts"""
-        phase1_config = self.config.get('phase1_operations', {})
-        regions = phase1_config.get('compute_regions', self.continents)
+        phase1_config = self.config.get('phase1_operations')
+        if phase1_config:
+            regions = phase1_config.get('compute_regions', self.continents)
+        else:
+            regions = self.continents
         
         years = self.get_year_range()
         latest_year = years[-1]
@@ -760,7 +786,7 @@ class GDPDashboard:
     
     def plot_phase1_year_analysis(self):
         """Year-specific GDP analysis with Line and Scatter plots"""
-        country = self.primary_country_var.get()
+        country = self.country_var.get()
         years = self.get_year_range()
         years_int = [int(y) for y in years]
         
@@ -800,10 +826,13 @@ class GDPDashboard:
     
     def plot_phase1_complete_analysis(self):
         """Complete analysis showing all 4 required chart types"""
-        phase1_config = self.config.get('phase1_operations', {})
-        regions = phase1_config.get('compute_regions', self.continents[:5])
+        phase1_config = self.config.get('phase1_operations')
+        if phase1_config:
+            regions = phase1_config.get('compute_regions', self.continents[:5])
+        else:
+            regions = self.continents[:5]
         
-        country = self.primary_country_var.get()
+        country = self.country_var.get()
         years = self.get_year_range()
         years_int = [int(y) for y in years]
         latest_year = years[-1]
@@ -905,9 +934,35 @@ class GDPDashboard:
         ui_config = self.config.get('ui')
         world_stats = self.processor.get_world_statistics(latest_year)
         
+        # Get selected primary country
+        selected_country = self.country_var.get()
+        
         stats_text = "=" * 80 + "\n"
         stats_text += " " * 25 + "GDP STATISTICAL SUMMARY\n"
         stats_text += "=" * 80 + "\n\n"
+        
+        # Show primary country statistics first
+        stats_text += f"SELECTED COUNTRY: {selected_country}\n"
+        stats_text += "-" * 80 + "\n"
+        
+        country_data = self.processor.get_country_data(selected_country, years)
+        if country_data is not None:
+            country_stats = self.processor.calculate_statistics(country_data)
+            if country_stats:
+                stats_text += f"GDP in {latest_year}: ${country_data[-1]:,.0f}\n"
+                stats_text += f"Maximum GDP ({years[0]}-{years[-1]}): ${country_stats['max']:,.0f}\n"
+                stats_text += f"Minimum GDP ({years[0]}-{years[-1]}): ${country_stats['min']:,.0f}\n"
+                stats_text += f"Average GDP: ${country_stats['mean']:,.0f}\n"
+                stats_text += f"Median GDP: ${country_stats['median']:,.0f}\n"
+                stats_text += f"Std Deviation: ${country_stats['std']:,.0f}\n"
+                
+                # Calculate growth
+                growth_summary = self.processor.calculate_growth_summary(country_data, [int(y) for y in years])
+                if growth_summary:
+                    stats_text += f"Total Growth: {growth_summary['total_growth']:.2f}%\n"
+                    if 'avg_annual_growth' in growth_summary:
+                        stats_text += f"Avg Annual Growth: {growth_summary['avg_annual_growth']:.2f}%\n"
+        stats_text += "\n"
         
         stats_text += "OVERALL STATISTICS\n"
         stats_text += "-" * 80 + "\n"
