@@ -127,6 +127,13 @@ class GDPDashboard:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
+        # Mouse wheel scrolling enable karo
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        # Bind mouse wheel to canvas and all child widgets
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
         # Analysis type ka section
         self.create_section_header(scrollable_frame, "📈 Analysis Type")
         self._create_analysis_type_options(scrollable_frame)
@@ -253,8 +260,17 @@ class GDPDashboard:
     def _create_action_buttons(self, parent):
         colors = self.config.get('colors')
         
+        # Add header for action buttons
+        action_header = tk.Frame(parent, bg=colors['section_bg'], height=35)
+        action_header.pack(fill=tk.X, padx=15, pady=(15, 5))
+        action_header.pack_propagate(False)
+        
+        header_label = tk.Label(action_header, text="⚡ Actions", bg=colors['section_bg'], 
+                        font=('Arial', 11, 'bold'), fg=colors['dark'])
+        header_label.pack(anchor=tk.W, padx=10, pady=5)
+        
         button_frame = tk.Frame(parent, bg=colors['white'])
-        button_frame.pack(pady=20, padx=20, fill=tk.X)
+        button_frame.pack(pady=10, padx=20, fill=tk.X)
         
         analyze_btn = tk.Button(
             button_frame,
@@ -265,33 +281,36 @@ class GDPDashboard:
             font=('Arial', 12, 'bold'),
             relief=tk.RAISED,
             borderwidth=3,
-            cursor='hand2'
+            cursor='hand2',
+            height=2
         )
         analyze_btn.pack(fill=tk.X, pady=5)
         
         export_btn = tk.Button(
             button_frame,
-            text="💾 Export Data",
+            text="💾 Export Results to TXT",
             command=self.export_analysis,
             bg=colors['success'],
             fg=colors['white'],
             font=('Arial', 11, 'bold'),
             relief=tk.RAISED,
             borderwidth=2,
-            cursor='hand2'
+            cursor='hand2',
+            height=2
         )
         export_btn.pack(fill=tk.X, pady=5)
         
         clear_btn = tk.Button(
             button_frame,
-            text="🗑️ Clear",
+            text="🗑️ Clear Visualization",
             command=self.clear_visualization,
             bg=colors['danger'],
             fg=colors['white'],
             font=('Arial', 11, 'bold'),
             relief=tk.RAISED,
             borderwidth=2,
-            cursor='hand2'
+            cursor='hand2',
+            height=2
         )
         clear_btn.pack(fill=tk.X, pady=5)
     
