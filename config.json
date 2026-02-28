@@ -45,13 +45,44 @@
     "update_delay_ms": 300
   },
   "colors": {
-    "primary": "#3498db",
-    "success": "#2ecc71",
-    "danger": "#e74c3c",
-    "dark": "#2c3e50",
-    "light_bg": "#f0f0f0",
-    "white": "white",
-    "section_bg": "#ecf0f1"
+    "primary": "#c084fc",
+    "secondary": "#FE53BB",
+    "accent": "#e879f9",
+    "success": "#00ff41",
+    "danger": "#ff0040",
+    "warning": "#F5D300",
+    "dark": "#1a0533",
+    "dark_surface": "#2d1b69",
+    "dark_card": "#4c1d95",
+    "dark_border": "#8b5cf6",
+    "dark_highlight": "#5b21b6",
+    "light_bg": "#1a0533",
+    "white": "#ffffff",
+    "text_primary": "#ffffff",
+    "text_secondary": "#ede9fe",
+    "text_muted": "#c4b5fd",
+    "section_bg": "#6d28d9",
+    "ui_accent": "#c084fc",
+    "ui_accent_dim": "#9333ea",
+    "ui_accent_glow": "#f0abfc",
+    "neon_cyan": "#08F7FE",
+    "neon_pink": "#FE53BB",
+    "neon_yellow": "#F5D300",
+    "neon_green": "#00ff41",
+    "neon_purple": "#b46eff",
+    "neon_orange": "#FF6E27",
+    "chart_palette": [
+      "#08F7FE",
+      "#FE53BB",
+      "#F5D300",
+      "#00ff41",
+      "#b46eff",
+      "#FF6E27",
+      "#00D4AA",
+      "#FF85B3",
+      "#A8E6CF",
+      "#FFD93D"
+    ]
   },
   "analysis_types": [
     {
@@ -104,9 +135,17 @@
     "figure_size_large": [14, 10],
     "figure_size_tall": [12, 8],
     "correlation_figure_size": [12, 10],
-    "style": "whitegrid",
+    "style": "dark_background",
     "max_years_rotation": 20,
     "max_comparison_years": 6,
-    "histogram_bins": 20
+    "histogram_bins": 20,
+    "use_cyberpunk": true,
+    "chart_bg_color": "#1a0533",
+    "chart_face_color": "#2d1b69",
+    "grid_color": "#5b21b6",
+    "grid_alpha": 0.3,
+    "title_font_size": 16,
+    "label_font_size": 12,
+    "tick_font_size": 9
   }
 }

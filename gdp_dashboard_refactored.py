@@ -1,15 +1,21 @@
 # GDP Analysis Dashboard
 # Mulkon aur continents ka GDP data analyze karne ke liye
 
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from matplotlib.ticker import FuncFormatter
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import messagebox, scrolledtext
+import ttkbootstrap as ttkb
+from ttkbootstrap.constants import *
 import warnings
 import numpy as np
 from functools import reduce
+import mplcyberpunk
 
 from data_loader import ConfigLoader, GDPDataLoader
 from data_processor import GDPDataProcessor
@@ -32,14 +38,35 @@ class GDPDashboard:
         
         # Setup UI from config
         ui_config = self.config.get('ui')
+        colors = self.config.get('colors')
         self.root.title(ui_config['title'])
         self.root.geometry(f"{ui_config['window_width']}x{ui_config['window_height']}")
-        self.root.configure(bg=self.config.get('colors', 'light_bg'))
+        self.root.configure(bg=colors['dark'])
         
-        # Apply visualization settings
+        # Apply dark cyberpunk visualization settings
         viz_config = self.config.get('visualization')
-        sns.set_style(viz_config['style'])
-        plt.rcParams['figure.figsize'] = viz_config['figure_size']
+        plt.style.use('cyberpunk')
+        plt.rcParams.update({
+            'figure.figsize': viz_config['figure_size'],
+            'figure.facecolor': viz_config.get('chart_face_color', '#2d1b69'),
+            'axes.facecolor': viz_config.get('chart_bg_color', '#1a0533'),
+            'axes.edgecolor': colors.get('ui_accent_glow', '#f0abfc'),
+            'axes.labelcolor': '#ffffff',
+            'text.color': '#ffffff',
+            'xtick.color': '#ffffff',
+            'ytick.color': '#ffffff',
+            'grid.color': viz_config.get('grid_color', '#5b21b6'),
+            'grid.alpha': viz_config.get('grid_alpha', 0.3),
+            'font.family': 'Segoe UI',
+            'axes.titlesize': viz_config.get('title_font_size', 16),
+            'axes.labelsize': viz_config.get('label_font_size', 12),
+            'xtick.labelsize': viz_config.get('tick_font_size', 9),
+            'ytick.labelsize': viz_config.get('tick_font_size', 9),
+        })
+        
+        # Store neon palette for quick access
+        self.neon_palette = colors.get('chart_palette', 
+            ['#08F7FE', '#FE53BB', '#F5D300', '#00ff41', '#9467ff', '#FF6E27'])
         
         # Load data
         try:
@@ -66,6 +93,9 @@ class GDPDashboard:
         
         self.create_widgets()
         
+        # Force ALL text to white after widgets exist (overrides vapor theme cyan)
+        self._force_white_text(self.root)
+        
         # Shuru mein ek default graph dikhao
         self.root.after(100, self.show_default_analysis)
     
@@ -76,19 +106,23 @@ class GDPDashboard:
         colors = self.config.get('colors')
         ui_config = self.config.get('ui')
         
-        main_container = tk.Frame(self.root, bg=colors['light_bg'])
+        main_container = tk.Frame(self.root, bg=colors['dark'])
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        # Baayi taraf control panel
-        left_panel = tk.Frame(main_container, bg=colors['white'], 
-                             width=ui_config['left_panel_width'], 
-                             relief=tk.RAISED, borderwidth=2)
+        # Neon aura left panel
+        left_panel = tk.Frame(main_container, bg=colors['dark_card'],
+                             width=ui_config['left_panel_width'],
+                             relief=tk.FLAT, borderwidth=0,
+                             highlightbackground=colors['ui_accent_glow'],
+                             highlightthickness=2)
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, padx=(0, 10), pady=5)
         left_panel.pack_propagate(False)
         
-        # Daahini taraf visualization panel
-        right_panel = tk.Frame(main_container, bg=colors['white'], 
-                              relief=tk.RAISED, borderwidth=2)
+        # Neon aura right panel
+        right_panel = tk.Frame(main_container, bg=colors['dark_card'],
+                              relief=tk.FLAT, borderwidth=0,
+                              highlightbackground=colors['ui_accent_glow'],
+                              highlightthickness=2)
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, pady=5)
         
         self.create_control_panel(left_panel)
@@ -98,27 +132,39 @@ class GDPDashboard:
         colors = self.config.get('colors')
         ui_config = self.config.get('ui')
         
-        title_frame = tk.Frame(self.root, bg=colors['dark'], 
+        # Neon aura outer wrapper around title bar
+        title_glow_wrap = tk.Frame(self.root,
+                                   bg=colors['ui_accent_glow'],
+                                   highlightbackground=colors['ui_accent_glow'],
+                                   highlightthickness=2)
+        title_glow_wrap.pack(fill=tk.X, padx=8, pady=(10, 0))
+
+        title_frame = tk.Frame(title_glow_wrap, bg=colors['dark_surface'],
                               height=ui_config['title_bar_height'])
-        title_frame.pack(fill=tk.X, padx=10, pady=10)
+        title_frame.pack(fill=tk.X, padx=2, pady=2)
         title_frame.pack_propagate(False)
         
+        # White title with neon glow
         title_label = tk.Label(
-            title_frame, 
-            text=ui_config['title_emoji'], 
-            font=('Arial', 24, 'bold'),
-            bg=colors['dark'],
-            fg=colors['white']
+            title_frame,
+            text=ui_config['title_emoji'],
+            font=('Segoe UI', 26, 'bold'),
+            bg=colors['dark_surface'],
+            fg='#ffffff'
         )
         title_label.pack(expand=True)
+        
+        # Neon accent line
+        accent_line = tk.Frame(self.root, bg=colors['ui_accent_glow'], height=3)
+        accent_line.pack(fill=tk.X, padx=8)
     
     def create_control_panel(self, parent):
         colors = self.config.get('colors')
         
-        # Scrollable frame banao controls ke liye
-        canvas = tk.Canvas(parent, bg=colors['white'], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=colors['white'])
+        # Dark themed scrollable frame with purple scrollbar
+        canvas = tk.Canvas(parent, bg=colors['dark_card'], highlightthickness=0)
+        scrollbar = ttkb.Scrollbar(parent, orient="vertical", command=canvas.yview, bootstyle="primary round")
+        scrollable_frame = tk.Frame(canvas, bg=colors['dark_card'])
         
         scrollable_frame.bind(
             "<Configure>",
@@ -132,7 +178,6 @@ class GDPDashboard:
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
-        # Bind mouse wheel to canvas and all child widgets
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
         
         # Analysis type ka section
@@ -173,9 +218,16 @@ class GDPDashboard:
                 text=analysis['name'],
                 variable=self.analysis_type,
                 value=analysis['value'],
-                bg=colors['white'],
-                font=('Arial', 10),
-                command=self.on_analysis_change
+                bg=colors['dark_card'],
+                fg='#ffffff',
+                selectcolor=colors['dark_highlight'],
+                activebackground=colors['dark_card'],
+                activeforeground='#ffffff',
+                font=('Segoe UI', 9),
+                command=self.on_analysis_change,
+                relief=tk.FLAT,
+                highlightthickness=0,
+                indicatoron=True
             )
             rb.pack(anchor=tk.W, padx=20, pady=2)
             return rb
@@ -193,26 +245,36 @@ class GDPDashboard:
             else self.countries[0]
         )
         
-        # Pehla country dropdown
-        tk.Label(parent, text="Primary Country:", bg=colors['white'], 
-                font=('Arial', 9, 'bold')).pack(anchor=tk.W, padx=20, pady=(5, 2))
+        # Primary country dropdown
+        tk.Label(parent, text="Primary Country:", bg=colors['dark_card'], fg='#ffffff',
+                font=('Segoe UI', 8)).pack(anchor=tk.W, padx=20, pady=(5, 2))
         self.country_var = tk.StringVar(value=default_country)
-        country_combo = ttk.Combobox(parent, textvariable=self.country_var, 
-                                     values=self.countries, width=30, state='readonly')
+        country_combo = ttkb.Combobox(parent, textvariable=self.country_var, 
+                                     values=self.countries, width=30, state='readonly',
+                                     bootstyle="primary")
         country_combo.pack(padx=20, pady=(0, 10))
         country_combo.bind('<<ComboboxSelected>>', lambda e: self.on_primary_country_change())
         
-        # Compare karne ke liye countries ki list
-        tk.Label(parent, text="Compare With:", bg=colors['white'], 
-                font=('Arial', 9, 'bold')).pack(anchor=tk.W, padx=20, pady=(5, 2))
+        # Compare list
+        tk.Label(parent, text="Compare With:", bg=colors['dark_card'], fg='#ffffff',
+                font=('Segoe UI', 8)).pack(anchor=tk.W, padx=20, pady=(5, 2))
         
-        compare_frame = tk.Frame(parent, bg=colors['white'])
+        compare_frame = tk.Frame(parent, bg=colors['dark_card'])
         compare_frame.pack(padx=20, pady=(0, 10), fill=tk.X)
         
-        self.compare_listbox = tk.Listbox(compare_frame, height=4, selectmode=tk.MULTIPLE, 
-                                         exportselection=False)
-        compare_scrollbar = ttk.Scrollbar(compare_frame, orient=tk.VERTICAL, 
-                                         command=self.compare_listbox.yview)
+        self.compare_listbox = tk.Listbox(compare_frame, height=4, selectmode=tk.MULTIPLE,
+                                         exportselection=False,
+                                         bg=colors['dark_surface'],
+                                         fg='#ffffff',
+                                         selectbackground=colors['ui_accent'],
+                                         selectforeground='#ffffff',
+                                         font=('Segoe UI', 8),
+                                         relief=tk.FLAT,
+                                         highlightbackground=colors['ui_accent_glow'],
+                                         highlightthickness=2)
+        compare_scrollbar = ttkb.Scrollbar(compare_frame, orient=tk.VERTICAL, 
+                                         command=self.compare_listbox.yview,
+                                         bootstyle="primary round")
         self.compare_listbox.configure(yscrollcommand=compare_scrollbar.set)
         
         # Populate listbox using map
@@ -244,8 +306,9 @@ class GDPDashboard:
         )
         
         self.continent_var = tk.StringVar(value=default_continent)
-        continent_combo = ttk.Combobox(parent, textvariable=self.continent_var, 
-                                      values=self.continents, width=30, state='readonly')
+        continent_combo = ttkb.Combobox(parent, textvariable=self.continent_var, 
+                                      values=self.continents, width=30, state='readonly',
+                                      bootstyle="primary")
         continent_combo.pack(padx=20, pady=(0, 10))
         continent_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
     
@@ -260,24 +323,24 @@ class GDPDashboard:
             if configured_year and int(configured_year) in self.year_columns:
                 default_end_year = configured_year
         
-        year_frame = tk.Frame(parent, bg=colors['white'])
+        year_frame = tk.Frame(parent, bg=colors['dark_card'])
         year_frame.pack(padx=20, pady=(0, 10), fill=tk.X)
         
-        tk.Label(year_frame, text="From:", bg=colors['white'], font=('Arial', 9)).grid(
-            row=0, column=0, sticky=tk.W, padx=(0, 5))
+        tk.Label(year_frame, text="From:", bg=colors['dark_card'], fg='#ffffff',
+                font=('Segoe UI', 8)).grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
         self.start_year_var = tk.StringVar(value=str(self.year_columns[0]))
-        start_year_combo = ttk.Combobox(year_frame, textvariable=self.start_year_var, 
+        start_year_combo = ttkb.Combobox(year_frame, textvariable=self.start_year_var, 
                                        values=list(map(str, self.year_columns)), 
-                                       width=10, state='readonly')
+                                       width=10, state='readonly', bootstyle="primary")
         start_year_combo.grid(row=0, column=1, padx=(0, 10))
         start_year_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
         
-        tk.Label(year_frame, text="To:", bg=colors['white'], font=('Arial', 9)).grid(
-            row=0, column=2, sticky=tk.W, padx=(0, 5))
+        tk.Label(year_frame, text="To:", bg=colors['dark_card'], fg='#ffffff',
+                font=('Segoe UI', 8)).grid(row=0, column=2, sticky=tk.W, padx=(0, 5))
         self.end_year_var = tk.StringVar(value=default_end_year)
-        end_year_combo = ttk.Combobox(year_frame, textvariable=self.end_year_var, 
+        end_year_combo = ttkb.Combobox(year_frame, textvariable=self.end_year_var, 
                                      values=list(map(str, self.year_columns)), 
-                                     width=10, state='readonly')
+                                     width=10, state='readonly', bootstyle="primary")
         end_year_combo.grid(row=0, column=3)
         end_year_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
     
@@ -285,108 +348,158 @@ class GDPDashboard:
         colors = self.config.get('colors')
         ui_config = self.config.get('ui')
         
-        top_frame = tk.Frame(parent, bg=colors['white'])
+        top_frame = tk.Frame(parent, bg=colors['dark_card'])
         top_frame.pack(padx=20, pady=(0, 10), fill=tk.X)
         
-        tk.Label(top_frame, text="Top N:", bg=colors['white'], font=('Arial', 9)).pack(
-            side=tk.LEFT, padx=(0, 10))
+        tk.Label(top_frame, text="Top N:", bg=colors['dark_card'], fg='#ffffff',
+                font=('Segoe UI', 9)).pack(side=tk.LEFT, padx=(0, 10))
         self.top_n_var = tk.IntVar(value=ui_config['default_top_n'])
-        top_n_spinner = tk.Spinbox(top_frame, from_=5, to=50, textvariable=self.top_n_var, 
-                                  width=10, command=self.on_selection_change)
+        top_n_spinner = tk.Spinbox(top_frame, from_=5, to=50, textvariable=self.top_n_var,
+                                  width=10, command=self.on_selection_change,
+                                  bg=colors['dark_surface'], fg='#ffffff',
+                                  buttonbackground=colors['dark_border'],
+                                  relief=tk.FLAT,
+                                  highlightbackground=colors['ui_accent_glow'],
+                                  highlightthickness=2,
+                                  font=('Segoe UI', 9))
         top_n_spinner.pack(side=tk.LEFT)
     
     def _create_action_buttons(self, parent):
         colors = self.config.get('colors')
         
         # Add header for action buttons
-        action_header = tk.Frame(parent, bg=colors['section_bg'], height=35)
-        action_header.pack(fill=tk.X, padx=15, pady=(15, 5))
+        action_header = tk.Frame(parent, bg=colors['section_bg'], height=30)
+        action_header.pack(fill=tk.X, padx=15, pady=(12, 4))
         action_header.pack_propagate(False)
         
-        header_label = tk.Label(action_header, text="⚡ Actions", bg=colors['section_bg'], 
-                        font=('Arial', 11, 'bold'), fg=colors['dark'])
+        header_label = tk.Label(action_header, text="⚡ Actions", bg=colors['section_bg'],
+                        font=('Segoe UI', 9, 'bold'), fg='#ffffff')
         header_label.pack(anchor=tk.W, padx=10, pady=5)
         
-        button_frame = tk.Frame(parent, bg=colors['white'])
+        button_frame = tk.Frame(parent, bg=colors['dark_card'])
         button_frame.pack(pady=10, padx=20, fill=tk.X)
         
+        # Purple analyze button
         analyze_btn = tk.Button(
             button_frame,
             text="🔍 Analyze",
             command=self.perform_analysis,
-            bg=colors['primary'],
-            fg=colors['white'],
-            font=('Arial', 12, 'bold'),
-            relief=tk.RAISED,
-            borderwidth=3,
+            bg=colors['dark_highlight'],
+            fg='#ffffff',
+            font=('Segoe UI', 10, 'bold'),
+            relief=tk.FLAT,
+            borderwidth=0,
             cursor='hand2',
-            height=2
+            height=2,
+            activebackground=colors['ui_accent'],
+            activeforeground='#ffffff',
+            highlightbackground=colors['ui_accent_glow'],
+            highlightthickness=2
         )
         analyze_btn.pack(fill=tk.X, pady=5)
         
+        # Neon green export button
         export_btn = tk.Button(
             button_frame,
             text="💾 Export Results to TXT",
             command=self.export_analysis,
-            bg=colors['success'],
-            fg=colors['white'],
-            font=('Arial', 11, 'bold'),
-            relief=tk.RAISED,
-            borderwidth=2,
+            bg=colors['dark_surface'],
+            fg='#ffffff',
+            font=('Segoe UI', 9, 'bold'),
+            relief=tk.FLAT,
+            borderwidth=0,
             cursor='hand2',
-            height=2
+            height=2,
+            activebackground=colors['neon_green'],
+            activeforeground=colors['dark'],
+            highlightbackground=colors['neon_green'],
+            highlightthickness=1
         )
         export_btn.pack(fill=tk.X, pady=5)
         
+        # Neon pink clear button
         clear_btn = tk.Button(
             button_frame,
             text="🗑️ Clear Visualization",
             command=self.clear_visualization,
-            bg=colors['danger'],
-            fg=colors['white'],
-            font=('Arial', 11, 'bold'),
-            relief=tk.RAISED,
-            borderwidth=2,
+            bg=colors['dark_surface'],
+            fg='#ffffff',
+            font=('Segoe UI', 9, 'bold'),
+            relief=tk.FLAT,
+            borderwidth=0,
             cursor='hand2',
-            height=2
+            height=2,
+            activebackground=colors['neon_pink'],
+            activeforeground=colors['dark'],
+            highlightbackground=colors['neon_pink'],
+            highlightthickness=1
         )
         clear_btn.pack(fill=tk.X, pady=5)
     
+    def _force_white_text(self, widget):
+        """Recursively force fg='#ffffff' on all tk.Label, tk.Radiobutton, tk.Checkbutton widgets."""
+        try:
+            widget_class = widget.winfo_class()
+            if widget_class in ('Label', 'Radiobutton', 'Checkbutton'):
+                widget.configure(fg='#ffffff')
+            elif widget_class == 'Radiobutton':
+                widget.configure(activeforeground='#ffffff')
+        except Exception:
+            pass
+        list(map(self._force_white_text, widget.winfo_children()))
+
     def create_section_header(self, parent, text):
         colors = self.config.get('colors')
         
-        # Section header banao
-        frame = tk.Frame(parent, bg=colors['section_bg'], height=35)
-        frame.pack(fill=tk.X, padx=15, pady=(15, 5))
+        # Dark themed section header with accent color
+        frame = tk.Frame(parent, bg=colors['section_bg'], height=30)
+        frame.pack(fill=tk.X, padx=15, pady=(12, 4))
         frame.pack_propagate(False)
         
-        label = tk.Label(frame, text=text, bg=colors['section_bg'], 
-                        font=('Arial', 11, 'bold'), fg=colors['dark'])
+        label = tk.Label(frame, text=text, bg=colors['section_bg'],
+                        font=('Segoe UI', 9, 'bold'), fg='#ffffff')
         label.pack(anchor=tk.W, padx=10, pady=5)
     
     def create_visualization_panel(self, parent):
         colors = self.config.get('colors')
         
-        # Visualization panel mein tabs banao
-        self.notebook = ttk.Notebook(parent)
+        # Purple-glowing notebook with ttkbootstrap vapor theme
+        style = ttkb.Style()
+        style.configure('primary.TNotebook', background=colors['dark_card'])
+        style.configure('primary.TNotebook.Tab',
+                       background=colors['dark_surface'],
+                       foreground=colors['text_secondary'],
+                       padding=[16, 8],
+                       font=('Segoe UI', 10, 'bold'))
+        style.map('primary.TNotebook.Tab',
+                 background=[('selected', colors['section_bg'])],
+                 foreground=[('selected', colors['ui_accent_glow'])])
+        
+        self.notebook = ttkb.Notebook(parent, bootstyle="primary")
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Pehla tab - graphs ke liye
-        self.viz_frame = tk.Frame(self.notebook, bg=colors['white'])
-        self.notebook.add(self.viz_frame, text="📊 Visualization")
+        # Graph tab - deep purple bg
+        self.viz_frame = tk.Frame(self.notebook, bg=colors['dark'])
+        self.notebook.add(self.viz_frame, text="  📊 Visualization  ")
         
-        # Dusra tab - statistics ke liye
-        self.stats_frame = tk.Frame(self.notebook, bg=colors['white'])
-        self.notebook.add(self.stats_frame, text="📋 Statistics")
+        # Statistics tab - deep purple bg
+        self.stats_frame = tk.Frame(self.notebook, bg=colors['dark'])
+        self.notebook.add(self.stats_frame, text="  📋 Statistics  ")
         
-        # Stats text area
+        # Stats text area - white text with neon border
         self.stats_text = scrolledtext.ScrolledText(
             self.stats_frame,
             wrap=tk.WORD,
-            font=('Courier New', 10),
-            bg='#f9f9f9',
-            relief=tk.SUNKEN,
-            borderwidth=2
+            font=('Cascadia Code', 10),
+            bg=colors['dark_card'],
+            fg='#ffffff',
+            insertbackground='#ffffff',
+            relief=tk.FLAT,
+            borderwidth=0,
+            highlightbackground=colors['ui_accent_glow'],
+            highlightthickness=2,
+            selectbackground=colors['ui_accent'],
+            selectforeground='#ffffff'
         )
         self.stats_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
     
@@ -424,6 +537,57 @@ class GDPDashboard:
         if hasattr(self, '_update_timer'):
             self.root.after_cancel(self._update_timer)
         self._update_timer = self.root.after(ui_config['update_delay_ms'], self.perform_analysis)
+    
+    def _style_figure(self, fig, nrows=1, ncols=1):
+        """Apply neon-glow border around the figure"""
+        colors = self.config.get('colors')
+        viz_config = self.config.get('visualization')
+        fig.patch.set_facecolor(viz_config.get('chart_face_color', '#2d1b69'))
+        fig.patch.set_alpha(1.0)
+        # Neon glow border around entire figure
+        fig.patch.set_linewidth(3)
+        fig.patch.set_edgecolor(colors.get('ui_accent_glow', '#f0abfc'))
+        return fig
+    
+    def _style_ax(self, ax, title='', xlabel='', ylabel='', grid=True):
+        """Apply consistent dark purple styling with neon spine glow"""
+        colors = self.config.get('colors')
+        viz_config = self.config.get('visualization')
+        ax.set_facecolor(viz_config.get('chart_bg_color', '#1a0533'))
+        # All 4 spines visible with neon glow
+        neon_color = colors.get('ui_accent_glow', '#f0abfc')
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color(neon_color)
+            spine.set_linewidth(1.8)
+        if title:
+            ax.set_title(title, fontsize=viz_config.get('title_font_size', 16),
+                        fontweight='bold', color='#ffffff', pad=16,
+                        fontfamily='Segoe UI')
+        if xlabel:
+            ax.set_xlabel(xlabel, fontsize=viz_config.get('label_font_size', 12),
+                         fontweight='bold', color='#ffffff',
+                         labelpad=8)
+        if ylabel:
+            ax.set_ylabel(ylabel, fontsize=viz_config.get('label_font_size', 12),
+                         fontweight='bold', color='#ffffff',
+                         labelpad=8)
+        if grid:
+            ax.grid(True, alpha=viz_config.get('grid_alpha', 0.3),
+                   color=viz_config.get('grid_color', '#5b21b6'),
+                   linestyle='--', linewidth=0.5)
+        ax.tick_params(colors='#ffffff', length=4, width=0.6)
+        return ax
+
+    def _format_gdp(self, value):
+        """Format GDP value as abbreviated string: T / B / M"""
+        if value >= 1e12:
+            return f'${value / 1e12:.2f}T'
+        elif value >= 1e9:
+            return f'${value / 1e9:.1f}B'
+        elif value >= 1e6:
+            return f'${value / 1e6:.1f}M'
+        return f'${value:,.0f}'
     
     def get_year_range(self):
         # Selected year range nikalo
@@ -474,21 +638,29 @@ class GDPDashboard:
         colors = self.config.get('colors')
         viz_config = self.config.get('visualization')
         
-        # Graph banao
+        # Neon styled graph
         fig = Figure(figsize=tuple(viz_config['figure_size']))
+        self._style_figure(fig)
         ax = fig.add_subplot(111)
+        self._style_ax(ax, title=f'GDP Trend: {country}', xlabel='Year', ylabel='GDP (USD)')
         
-        ax.plot(years, gdp_values, marker='o', linewidth=2, markersize=4, color=colors['primary'])
-        ax.set_xlabel('Year', fontsize=12, fontweight='bold')
-        ax.set_ylabel('GDP (USD)', fontsize=12, fontweight='bold')
-        ax.set_title(f'GDP Trend: {country}', fontsize=14, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        ax.ticklabel_format(style='plain', axis='y')
+        ax.plot(years, gdp_values, marker='o', linewidth=2.5, markersize=5, 
+               color=colors['neon_cyan'], markeredgecolor=colors['neon_pink'],
+               markeredgewidth=1.5, zorder=5)
         
-        # Agar bahut zyada years hain to labels ghumao
+        # Add subtle fill under curve
+        ax.fill_between(years, gdp_values, alpha=0.1, color=colors['neon_cyan'])
+        
+        ax.yaxis.set_major_formatter(FuncFormatter(
+            lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else
+                          f'${y/1e9:.0f}B' if y >= 1e9 else
+                          f'${y/1e6:.0f}M' if y >= 1e6 else f'${y:,.0f}')
+        ))
+        
         if len(years) > viz_config['max_years_rotation']:
             ax.tick_params(axis='x', rotation=45)
         
+        mplcyberpunk.add_glow_effects(ax)
         fig.tight_layout()
         self.display_plot(fig)
         
@@ -525,33 +697,40 @@ class GDPDashboard:
         viz_config = self.config.get('visualization')
         
         fig = Figure(figsize=tuple(viz_config['figure_size']))
+        self._style_figure(fig)
         ax = fig.add_subplot(111)
+        self._style_ax(ax, title='GDP Comparison Between Countries', xlabel='Year', ylabel='GDP (USD)')
         
-        color_palette = plt.cm.tab10(np.linspace(0, 1, len(countries)))
+        # Use neon palette for multi-country comparison
+        neon_colors = colors_config.get('chart_palette', self.neon_palette)
         
         def plot_country(idx_country):
             idx, country = idx_country
             gdp_values = self.processor.get_country_data(country, years)
             if gdp_values is not None:
+                color = neon_colors[idx % len(neon_colors)]
                 lw, ms, label = (
-                    (3, 5, f"{country} (Primary)") if country == primary_country
-                    else (2, 3, country)
+                    (3, 6, f"{country} (Primary)") if country == primary_country
+                    else (2, 4, country)
                 )
                 ax.plot(years, gdp_values, marker='o', label=label,
-                       linewidth=lw, markersize=ms, color=color_palette[idx])
+                       linewidth=lw, markersize=ms, color=color, alpha=0.9)
         
         list(map(plot_country, enumerate(countries)))
         
-        ax.set_xlabel('Year', fontsize=12, fontweight='bold')
-        ax.set_ylabel('GDP (USD)', fontsize=12, fontweight='bold')
-        ax.set_title('GDP Comparison Between Countries', fontsize=14, fontweight='bold')
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
-        ax.grid(True, alpha=0.3)
-        ax.ticklabel_format(style='plain', axis='y')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9,
+                 facecolor=colors_config['dark_surface'], edgecolor=colors_config['dark_border'],
+                 labelcolor=colors_config['text_primary'], framealpha=0.85)
+        ax.yaxis.set_major_formatter(FuncFormatter(
+            lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else
+                          f'${y/1e9:.0f}B' if y >= 1e9 else
+                          f'${y/1e6:.0f}M' if y >= 1e6 else f'${y:,.0f}')
+        ))
         
         if len(years) > viz_config['max_years_rotation']:
             ax.tick_params(axis='x', rotation=45)
         
+        mplcyberpunk.add_glow_effects(ax)
         fig.tight_layout()
         self.display_plot(fig)
         
@@ -571,42 +750,72 @@ class GDPDashboard:
         colors = self.config.get('colors')
         viz_config = self.config.get('visualization')
         
-        # Multiple subplots banao
+        # Dark multi-subplot figure
         fig = Figure(figsize=tuple(viz_config['figure_size_large']))
+        self._style_figure(fig)
         
-        # Plot 1: Total GDP trend
-        ax1 = fig.add_subplot(221)
-        total_gdp = self.processor.calculate_total_gdp(continent_data, years)
-        ax1.plot(years, total_gdp.values, marker='o', linewidth=2, color=colors['success'])
-        ax1.set_title(f'Total GDP Trend: {continent}', fontweight='bold')
-        ax1.set_xlabel('Year')
-        ax1.set_ylabel('Total GDP (USD)')
-        ax1.grid(True, alpha=0.3)
-        ax1.ticklabel_format(style='plain', axis='y')
-        
-        # Plot 2: Top countries in latest year
-        ax2 = fig.add_subplot(222)
+        # Fix: assign latest_year BEFORE it's used in subplot titles
         latest_year = years[-1]
+        
+        # Plot 1: Total GDP trend with neon glow
+        ax1 = fig.add_subplot(221)
+        self._style_ax(ax1, title=f'Total GDP Trend: {continent}', xlabel='Year', ylabel='Total GDP (USD)')
+        total_gdp = self.processor.calculate_total_gdp(continent_data, years)
+        ax1.plot(years, total_gdp.values, marker='o', linewidth=2.5, color=colors['neon_green'],
+                markeredgecolor=colors['neon_pink'], markeredgewidth=1)
+        ax1.fill_between(years, total_gdp.values, alpha=0.08, color=colors['neon_green'])
+        ax1.yaxis.set_major_formatter(FuncFormatter(
+            lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
+        ))
+        mplcyberpunk.add_glow_effects(ax1)
+        
+        # Plot 2: Top countries - horizontal neon bars
+        ax2 = fig.add_subplot(222)
+        self._style_ax(ax2, title=f"Top {ui_config['default_top_n']} Countries in {latest_year}", xlabel='GDP (USD)', grid=False)
         top_countries = continent_data.nlargest(ui_config['default_top_n'], latest_year)
         countries_list = top_countries['Country Name'].values
         gdp_list = top_countries[latest_year].values
         
-        ax2.barh(countries_list, gdp_list, color=colors['primary'])
-        ax2.set_title(f"Top {ui_config['default_top_n']} Countries in {latest_year}", fontweight='bold')
-        ax2.set_xlabel('GDP (USD)')
-        ax2.ticklabel_format(style='plain', axis='x')
+        bar_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(countries_list))))
+        bars2 = ax2.barh(countries_list, gdp_list, color=bar_colors, alpha=0.88,
+                         edgecolor='white', linewidth=0.25, height=0.65)
+        ax2.barh(countries_list, gdp_list, color='white', alpha=0.05, edgecolor='none', height=0.65)
+        ax2.grid(axis='x', alpha=0.15, color=colors.get('dark_border', '#2d2d5e'), linestyle='--', linewidth=0.5)
+        ax2.set_xlim(0, max(gdp_list) * 1.22)
+        ax2.xaxis.set_major_formatter(FuncFormatter(
+            lambda x, _: (f'${x/1e12:.0f}T' if x >= 1e12 else f'${x/1e9:.0f}B' if x >= 1e9 else f'${x/1e6:.0f}M')
+        ))
+        list(map(
+            lambda bv: ax2.text(max(gdp_list) * 0.015, bv[0].get_y() + bv[0].get_height() / 2,
+                                self._format_gdp(bv[1]), va='center', ha='left', fontsize=7,
+                                color='white', fontweight='bold', alpha=0.9),
+            zip(bars2, gdp_list)
+        ))
         
-        # Plot 3: Average GDP by country
+        # Plot 3: Average GDP - neon bars
         ax3 = fig.add_subplot(223)
+        self._style_ax(ax3, title=f"Top {ui_config['default_top_n']} by Average GDP ({years[0]}-{years[-1]})", xlabel='Average GDP (USD)', grid=False)
         avg_gdp = self.processor.calculate_average_gdp(continent_data, years)
         continent_data_with_avg = continent_data.copy()
         continent_data_with_avg['avg_gdp'] = avg_gdp
         top_avg = continent_data_with_avg.nlargest(ui_config['default_top_n'], 'avg_gdp')
         
-        ax3.barh(top_avg['Country Name'].values, top_avg['avg_gdp'].values, color=colors['danger'])
-        ax3.set_title(f"Top {ui_config['default_top_n']} by Average GDP ({years[0]}-{years[-1]})", fontweight='bold')
-        ax3.set_xlabel('Average GDP (USD)')
-        ax3.ticklabel_format(style='plain', axis='x')
+        avg_vals = top_avg['avg_gdp'].values
+        avg_names = top_avg['Country Name'].values
+        bars3 = ax3.barh(avg_names, avg_vals, color=colors['neon_pink'], alpha=0.88,
+                         edgecolor='white', linewidth=0.25, height=0.65)
+        ax3.barh(avg_names, avg_vals, color='white', alpha=0.05, edgecolor='none', height=0.65)
+        ax3.grid(axis='x', alpha=0.15, color=colors.get('dark_border', '#2d2d5e'), linestyle='--', linewidth=0.5)
+        ax3.set_xlim(0, max(avg_vals) * 1.22)
+        ax3.xaxis.set_major_formatter(FuncFormatter(
+            lambda x, _: (f'${x/1e12:.0f}T' if x >= 1e12 else f'${x/1e9:.0f}B' if x >= 1e9 else f'${x/1e6:.0f}M')
+        ))
+        list(map(
+            lambda bv: ax3.text(max(avg_vals) * 0.015, bv[0].get_y() + bv[0].get_height() / 2,
+                                self._format_gdp(bv[1]), va='center', ha='left', fontsize=7,
+                                color='white', fontweight='bold', alpha=0.9),
+            zip(bars3, avg_vals)
+        ))
         
         # Plot 4: GDP distribution (controlled by enable_histogram config)
         phase1_viz = self.config.get('phase1_visualizations')
@@ -614,12 +823,13 @@ class GDPDashboard:
         
         if enable_histogram:
             ax4 = fig.add_subplot(224)
+            self._style_ax(ax4, title=f'GDP Distribution in {latest_year}', xlabel='GDP (USD)', ylabel='Number of Countries', grid=False)
             latest_gdp = continent_data[latest_year].dropna()
-            ax4.hist(latest_gdp, bins=viz_config['histogram_bins'], color='#9b59b6', edgecolor='black', alpha=0.7)
-            ax4.set_title(f'GDP Distribution in {latest_year}', fontweight='bold')
-            ax4.set_xlabel('GDP (USD)')
-            ax4.set_ylabel('Number of Countries')
-            ax4.ticklabel_format(style='plain', axis='x')
+            ax4.hist(latest_gdp, bins=viz_config['histogram_bins'], color=colors['neon_purple'],
+                    edgecolor=colors['dark_border'], alpha=0.75)
+            ax4.xaxis.set_major_formatter(FuncFormatter(
+                lambda x, _: (f'${x/1e12:.0f}T' if x >= 1e12 else f'${x/1e9:.0f}B' if x >= 1e9 else f'${x/1e6:.0f}M')
+            ))
         
         fig.tight_layout()
         self.display_plot(fig)
@@ -635,29 +845,54 @@ class GDPDashboard:
         top_countries = self.processor.get_top_countries(latest_year, top_n)
         
         viz_config = self.config.get('visualization')
+        colors = self.config.get('colors')
         fig = Figure(figsize=tuple(viz_config['figure_size_tall']))
+        self._style_figure(fig)
         ax = fig.add_subplot(111)
+        self._style_ax(ax, title=f'Top {top_n} Countries by GDP in {latest_year}', xlabel='GDP (USD)', grid=False)
         
         countries_list = top_countries['Country Name'].values
         gdp_list = top_countries[latest_year].values
-        colors = plt.cm.viridis(np.linspace(0, 1, len(countries_list)))
+        bar_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(countries_list))))
         
-        bars = ax.barh(countries_list, gdp_list, color=colors)
-        ax.set_xlabel('GDP (USD)', fontsize=12, fontweight='bold')
-        ax.set_title(f'Top {top_n} Countries by GDP in {latest_year}', fontsize=14, fontweight='bold')
-        ax.ticklabel_format(style='plain', axis='x')
-        ax.grid(axis='x', alpha=0.3)
-        
-        # Value labels lagao bars par using map
+        bars = ax.barh(countries_list, gdp_list, color=bar_colors, alpha=0.88,
+                       edgecolor='white', linewidth=0.25, height=0.65)
+        # Subtle white sheen overlay for depth
+        ax.barh(countries_list, gdp_list, color='white', alpha=0.05,
+                edgecolor='none', height=0.65)
+        ax.grid(axis='x', alpha=0.18, color=colors.get('dark_border', '#2d2d5e'),
+                linestyle='--', linewidth=0.5)
+        ax.set_xlim(0, max(gdp_list) * 1.22)
+        # Abbreviated x-axis tick labels
+        ax.xaxis.set_major_formatter(FuncFormatter(
+            lambda x, _: (f'${x/1e12:.0f}T' if x >= 1e12 else
+                          f'${x/1e9:.0f}B' if x >= 1e9 else
+                          f'${x/1e6:.0f}M' if x >= 1e6 else f'${x:,.0f}')
+        ))
+        # Abbreviated value labels inside bars
         list(map(
-            lambda bv: ax.text(bv[1], bv[0].get_y() + bv[0].get_height()/2,
-                              f' {bv[1]:,.0f}', va='center', fontsize=8),
+            lambda bv: ax.text(
+                max(gdp_list) * 0.015,
+                bv[0].get_y() + bv[0].get_height() / 2,
+                self._format_gdp(bv[1]),
+                va='center', ha='left', fontsize=9,
+                color='white', fontweight='bold', alpha=0.95
+            ),
             zip(bars, gdp_list)
         ))
-        
+        # Rank badges on the left
+        list(map(
+            lambda ib: ax.text(
+                -max(gdp_list) * 0.008,
+                ib[1].get_y() + ib[1].get_height() / 2,
+                f'#{ib[0] + 1}',
+                va='center', ha='right', fontsize=8,
+                color=colors.get('text_secondary', '#9878cc'), fontweight='bold'
+            ),
+            enumerate(bars)
+        ))
         fig.tight_layout()
         self.display_plot(fig)
-        
         self.show_top_countries_statistics(top_countries, latest_year)
     
     def plot_growth_rate(self):
@@ -680,20 +915,31 @@ class GDPDashboard:
         colors_config = self.config.get('colors')
         viz_config = self.config.get('visualization')
         
-        # Graph banao
+        # Neon growth rate chart
         fig = Figure(figsize=tuple(viz_config['figure_size']))
+        self._style_figure(fig)
         ax = fig.add_subplot(111)
+        self._style_ax(ax, title=f'GDP Growth Rate: {country}', xlabel='Year', ylabel='Growth Rate (%)')
         
         bar_colors = list(map(
-            lambda gr: colors_config['success'] if gr >= 0 else colors_config['danger'],
+            lambda gr: colors_config['neon_green'] if gr >= 0 else colors_config['neon_pink'],
             growth_rates
         ))
-        ax.bar(growth_years, growth_rates, color=bar_colors, alpha=0.7, edgecolor='black')
-        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
-        ax.set_xlabel('Year', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Growth Rate (%)', fontsize=12, fontweight='bold')
-        ax.set_title(f'GDP Growth Rate: {country}', fontsize=14, fontweight='bold')
-        ax.grid(True, alpha=0.3, axis='y')
+        ax.bar(growth_years, growth_rates, color=bar_colors, alpha=0.88,
+               edgecolor='white', linewidth=0.25, width=0.7)
+        ax.bar(growth_years, growth_rates, color='white', alpha=0.04, edgecolor='none', width=0.7)
+        ax.axhline(y=0, color=colors_config.get('ui_accent_dim', '#7c3aed'),
+                   linestyle='--', linewidth=1.0, alpha=0.7)
+        # Growth rate % labels above/below each bar
+        list(map(
+            lambda yg: ax.text(
+                yg[1], yg[0] + (abs(yg[0]) * 0.05 + 0.15) * (1 if yg[0] >= 0 else -1),
+                f'{yg[0]:.1f}%',
+                ha='center', va='bottom' if yg[0] >= 0 else 'top',
+                fontsize=7, color='white', fontweight='bold', alpha=0.85
+            ),
+            zip(growth_rates, growth_years)
+        ))
         
         if len(growth_years) > viz_config['max_years_rotation']:
             ax.tick_params(axis='x', rotation=45)
@@ -718,12 +964,15 @@ class GDPDashboard:
             comparison_years = years
         
         fig = Figure(figsize=tuple(viz_config['figure_size_large']))
+        self._style_figure(fig)
         ax = fig.add_subplot(111)
+        self._style_ax(ax, title='GDP Comparison Across Continents', xlabel='Continent', ylabel='Total GDP (USD)')
         
         x = np.arange(len(self.continents))
         width = 0.8 / len(comparison_years)
         
-        colors = plt.cm.Set3(np.linspace(0, 1, len(comparison_years)))
+        # Use neon palette for year bars
+        neon_colors = self.neon_palette
         
         comparison_data = self.processor.get_year_comparison_data(comparison_years, self.continents)
         
@@ -731,18 +980,23 @@ class GDPDashboard:
             idx, year = idx_year
             continent_gdp = list(map(lambda c: comparison_data[year][c], self.continents))
             offset = (idx - len(comparison_years)/2) * width + width/2
-            ax.bar(x + offset, continent_gdp, width, label=str(year), color=colors[idx])
+            ax.bar(x + offset, continent_gdp, width, label=str(year),
+                  color=neon_colors[idx % len(neon_colors)], alpha=0.88,
+                  edgecolor='white', linewidth=0.2)
         
         list(map(plot_year_bar, enumerate(comparison_years)))
         
-        ax.set_xlabel('Continent', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Total GDP (USD)', fontsize=12, fontweight='bold')
-        ax.set_title('GDP Comparison Across Continents', fontsize=14, fontweight='bold')
         ax.set_xticks(x)
         ax.set_xticklabels(self.continents, rotation=45, ha='right')
-        ax.legend()
-        ax.ticklabel_format(style='plain', axis='y')
-        ax.grid(True, alpha=0.3, axis='y')
+        ax.legend(facecolor=self.config.get('colors')['dark_surface'],
+                 edgecolor=self.config.get('colors')['dark_border'],
+                 labelcolor=self.config.get('colors')['text_primary'],
+                 framealpha=0.85, fontsize=9)
+        ax.yaxis.set_major_formatter(FuncFormatter(
+            lambda y, _: (f'${y/1e12:.0f}T' if y >= 1e12 else
+                          f'${y/1e9:.0f}B' if y >= 1e9 else
+                          f'${y/1e6:.0f}M' if y >= 1e6 else f'${y:,.0f}')
+        ))
         
         fig.tight_layout()
         self.display_plot(fig)
@@ -783,10 +1037,18 @@ class GDPDashboard:
             return
         
         viz_config = self.config.get('visualization')
+        colors = self.config.get('colors')
         fig = Figure(figsize=tuple(viz_config['correlation_figure_size']))
+        self._style_figure(fig)
         ax = fig.add_subplot(111)
+        self._style_ax(ax, title='GDP Correlation Matrix', grid=False)
         
-        im = ax.imshow(correlation_matrix, cmap='coolwarm', aspect='auto', vmin=-1, vmax=1)
+        # Custom colormap for dark theme: magenta -> dark -> cyan
+        from matplotlib.colors import LinearSegmentedColormap
+        neon_cmap = LinearSegmentedColormap.from_list('neon_corr', 
+            [colors['neon_pink'], colors['dark'], colors['neon_cyan']], N=256)
+        
+        im = ax.imshow(correlation_matrix, cmap=neon_cmap, aspect='auto', vmin=-1, vmax=1)
         
         ax.set_xticks(np.arange(len(countries)))
         ax.set_yticks(np.arange(len(countries)))
@@ -794,17 +1056,19 @@ class GDPDashboard:
         ax.set_yticklabels(countries, fontsize=8)
         
         cbar = fig.colorbar(im, ax=ax)
-        cbar.set_label('Correlation Coefficient', rotation=270, labelpad=20)
+        cbar.set_label('Correlation Coefficient', rotation=270, labelpad=20, 
+                      color=colors['text_primary'])
+        cbar.ax.yaxis.set_tick_params(color=colors['text_secondary'])
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color=colors['text_secondary'])
         
         # Add text annotations using map
         from itertools import product as iter_product
         list(map(
             lambda ij: ax.text(ij[1], ij[0], f'{correlation_matrix.iloc[ij[0], ij[1]]:.2f}',
-                              ha="center", va="center", color="black", fontsize=7),
+                              ha="center", va="center", color=colors['text_primary'], 
+                              fontsize=7, fontweight='bold'),
             iter_product(range(len(countries)), range(len(countries)))
         ))
-        
-        ax.set_title('GDP Correlation Matrix', fontsize=14, fontweight='bold', pad=20)
         
         fig.tight_layout()
         self.display_plot(fig)
@@ -840,21 +1104,32 @@ class GDPDashboard:
         num_charts = len(region_charts)
         
         fig = Figure(figsize=tuple(viz_config['figure_size_large']))
+        self._style_figure(fig)
         
         def render_chart(idx_chart):
             idx, chart_type = idx_chart
             ax = fig.add_subplot(1, num_charts, idx + 1)
+            self._style_ax(ax, grid=False)
             if chart_type == 'pie':
-                colors_pie = plt.cm.Set3(range(len(region_names)))
-                ax.pie(gdp_values, labels=region_names, autopct='%1.1f%%', startangle=90, colors=colors_pie)
-                ax.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold', fontsize=12)
+                # Neon colored pie chart
+                pie_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(region_names))))
+                wedges, texts, autotexts = ax.pie(gdp_values, labels=region_names, autopct='%1.1f%%', 
+                                                   startangle=90, colors=pie_colors,
+                                                   textprops={'color': colors_config['text_primary'], 'fontsize': 10})
+                plt.setp(autotexts, fontweight='bold', fontsize=9)
+                ax.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold', 
+                           fontsize=14, color=colors_config['text_primary'], pad=12)
             elif chart_type == 'bar':
-                ax.bar(region_names, gdp_values, color=plt.cm.viridis(np.linspace(0, 1, len(region_names))))
-                ax.set_xlabel('Region', fontweight='bold')
-                ax.set_ylabel('GDP (USD)', fontweight='bold')
-                ax.set_title(f'Regional GDP Comparison ({latest_year})', fontweight='bold', fontsize=12)
+                bar_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(region_names))))
+                ax.bar(region_names, gdp_values, color=bar_colors, alpha=0.88,
+                       edgecolor='white', linewidth=0.25, width=0.65)
+                ax.bar(region_names, gdp_values, color='white', alpha=0.04, edgecolor='none', width=0.65)
+                self._style_ax(ax, title=f'Regional GDP Comparison ({latest_year})', xlabel='Region', ylabel='GDP (USD)', grid=False)
                 ax.tick_params(axis='x', rotation=45)
-                ax.ticklabel_format(style='plain', axis='y')
+                ax.grid(axis='y', alpha=0.15, color=colors_config.get('dark_border', '#2d2d5e'), linestyle='--', linewidth=0.5)
+                ax.yaxis.set_major_formatter(FuncFormatter(
+                    lambda y, _: (f'${y/1e12:.0f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
+                ))
         
         list(map(render_chart, enumerate(region_charts)))
         
@@ -884,26 +1159,31 @@ class GDPDashboard:
         num_charts = len(year_charts)
         
         fig = Figure(figsize=tuple(viz_config['figure_size_large']))
+        self._style_figure(fig)
         
         def render_year_chart(idx_chart):
             idx, chart_type = idx_chart
             ax = fig.add_subplot(1, num_charts, idx + 1)
             if chart_type == 'line':
-                ax.plot(years_int, country_data, marker='o', linewidth=2, color=colors_config['primary'], label=country)
-                ax.set_xlabel('Year', fontweight='bold')
-                ax.set_ylabel('GDP (USD)', fontweight='bold')
-                ax.set_title(f'{country} - GDP Trend Over Years', fontweight='bold', fontsize=12)
-                ax.grid(True, alpha=0.3)
-                ax.legend()
-                ax.ticklabel_format(style='plain', axis='y')
+                self._style_ax(ax, title=f'{country} - GDP Trend Over Years', xlabel='Year', ylabel='GDP (USD)')
+                ax.plot(years_int, country_data, marker='o', linewidth=2.5, 
+                       color=colors_config['neon_cyan'], markeredgecolor=colors_config['neon_pink'],
+                       markeredgewidth=1.5, label=country)
+                ax.fill_between(years_int, country_data, alpha=0.08, color=colors_config['neon_cyan'])
+                ax.legend(facecolor=colors_config['dark_surface'], edgecolor=colors_config['dark_border'],
+                         labelcolor=colors_config['text_primary'], framealpha=0.85)
+                ax.yaxis.set_major_formatter(FuncFormatter(
+                    lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
+                ))
+                mplcyberpunk.add_glow_effects(ax)
             elif chart_type == 'scatter':
-                colors_scatter = plt.cm.coolwarm(np.linspace(0, 1, len(years_int)))
-                ax.scatter(years_int, country_data, c=colors_scatter, s=100, alpha=0.6, edgecolors='black')
-                ax.set_xlabel('Year', fontweight='bold')
-                ax.set_ylabel('GDP (USD)', fontweight='bold')
-                ax.set_title(f'{country} - GDP Scatter Analysis', fontweight='bold', fontsize=12)
-                ax.grid(True, alpha=0.3)
-                ax.ticklabel_format(style='plain', axis='y')
+                self._style_ax(ax, title=f'{country} - GDP Scatter Analysis', xlabel='Year', ylabel='GDP (USD)')
+                scatter_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(years_int))))
+                ax.scatter(years_int, country_data, c=scatter_colors, s=120, alpha=0.85, 
+                          edgecolors=colors_config['text_primary'], linewidth=0.5, zorder=5)
+                ax.yaxis.set_major_formatter(FuncFormatter(
+                    lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
+                ))
         
         list(map(render_year_chart, enumerate(year_charts)))
         
@@ -931,6 +1211,7 @@ class GDPDashboard:
         colors_config = self.config.get('colors')
         
         fig = Figure(figsize=tuple(viz_config.get('figure_size_large', [14, 10])))
+        self._style_figure(fig)
         
         # Build regional GDP data using map/filter
         regional_gdp_pairs = list(filter(
@@ -942,50 +1223,70 @@ class GDPDashboard:
         
         # Subplot 1: First region chart type (pie or bar)
         ax1 = fig.add_subplot(221)
+        self._style_ax(ax1, grid=False)
         if 'pie' in region_charts:
-            ax1.pie(valid_region_values, labels=valid_region_names, autopct='%1.1f%%', startangle=90)
-            ax1.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold')
+            pie_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(valid_region_names))))
+            wedges, texts, autotexts = ax1.pie(valid_region_values, labels=valid_region_names, autopct='%1.1f%%', 
+                                                startangle=90, colors=pie_colors,
+                                                textprops={'color': colors_config['text_primary']})
+            plt.setp(autotexts, fontweight='bold', fontsize=9)
+            ax1.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold', 
+                         color=colors_config['text_primary'], fontsize=14)
         elif 'bar' in region_charts:
-            ax1.bar(valid_region_names, valid_region_values, color=plt.cm.viridis(np.linspace(0, 1, len(valid_region_names))))
-            ax1.set_title(f'Regional GDP Bar Chart ({latest_year})', fontweight='bold')
+            bar_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(valid_region_names))))
+            ax1.bar(valid_region_names, valid_region_values, color=bar_colors, alpha=0.88,
+                   edgecolor='white', linewidth=0.25, width=0.65)
+            ax1.bar(valid_region_names, valid_region_values, color='white', alpha=0.04, edgecolor='none', width=0.65)
+            self._style_ax(ax1, title=f'Regional GDP Bar Chart ({latest_year})', grid=False)
             ax1.tick_params(axis='x', rotation=45)
-            ax1.ticklabel_format(style='plain', axis='y')
+            ax1.yaxis.set_major_formatter(FuncFormatter(
+                lambda y, _: (f'${y/1e12:.0f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
+            ))
         
         # Subplot 2: Second region chart type
         ax2 = fig.add_subplot(222)
+        self._style_ax(ax2, grid=False)
         if 'bar' in region_charts:
-            ax2.bar(valid_region_names, valid_region_values, color=plt.cm.viridis(np.linspace(0, 1, len(valid_region_names))))
-            ax2.set_xlabel('Region', fontweight='bold')
-            ax2.set_ylabel('GDP (USD)', fontweight='bold')
-            ax2.set_title(f'Regional GDP Bar Chart ({latest_year})', fontweight='bold')
+            bar_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(valid_region_names))))
+            ax2.bar(valid_region_names, valid_region_values, color=bar_colors, alpha=0.88,
+                   edgecolor='white', linewidth=0.25, width=0.65)
+            ax2.bar(valid_region_names, valid_region_values, color='white', alpha=0.04, edgecolor='none', width=0.65)
+            self._style_ax(ax2, title=f'Regional GDP Bar Chart ({latest_year})', xlabel='Region', ylabel='GDP (USD)', grid=False)
             ax2.tick_params(axis='x', rotation=45)
-            ax2.ticklabel_format(style='plain', axis='y')
+            ax2.yaxis.set_major_formatter(FuncFormatter(
+                lambda y, _: (f'${y/1e12:.0f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
+            ))
         elif 'pie' in region_charts:
-            ax2.pie(valid_region_values, labels=valid_region_names, autopct='%1.1f%%', startangle=90)
-            ax2.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold')
+            pie_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(valid_region_names))))
+            ax2.pie(valid_region_values, labels=valid_region_names, autopct='%1.1f%%', startangle=90, colors=pie_colors,
+                   textprops={'color': colors_config['text_primary']})
+            ax2.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold',
+                         color=colors_config['text_primary'], fontsize=14)
         
         country_data = self.processor.get_country_data(country, years)
         
-        # Subplot 3: First year chart type (line or scatter)
+        # Subplot 3: Line chart with neon glow
         ax3 = fig.add_subplot(223)
         if country_data is not None and 'line' in year_charts:
-            ax3.plot(years_int, country_data, marker='o', linewidth=2, color=colors_config['success'])
-            ax3.set_xlabel('Year', fontweight='bold')
-            ax3.set_ylabel('GDP (USD)', fontweight='bold')
-            ax3.set_title(f'{country} - Line Graph', fontweight='bold')
-            ax3.grid(True, alpha=0.3)
-            ax3.ticklabel_format(style='plain', axis='y')
+            self._style_ax(ax3, title=f'{country} - Line Graph', xlabel='Year', ylabel='GDP (USD)')
+            ax3.plot(years_int, country_data, marker='o', linewidth=2.5, color=colors_config['neon_green'],
+                    markeredgecolor=colors_config['neon_pink'], markeredgewidth=1)
+            ax3.fill_between(years_int, country_data, alpha=0.08, color=colors_config['neon_green'])
+            ax3.yaxis.set_major_formatter(FuncFormatter(
+                lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
+            ))
+            mplcyberpunk.add_glow_effects(ax3)
         
-        # Subplot 4: Second year chart type
+        # Subplot 4: Scatter with neon colors
         ax4 = fig.add_subplot(224)
         if country_data is not None and 'scatter' in year_charts:
-            ax4.scatter(years_int, country_data, c=plt.cm.coolwarm(np.linspace(0, 1, len(years_int))), 
-                       s=100, alpha=0.6, edgecolors='black')
-            ax4.set_xlabel('Year', fontweight='bold')
-            ax4.set_ylabel('GDP (USD)', fontweight='bold')
-            ax4.set_title(f'{country} - Scatter Plot', fontweight='bold')
-            ax4.grid(True, alpha=0.3)
-            ax4.ticklabel_format(style='plain', axis='y')
+            self._style_ax(ax4, title=f'{country} - Scatter Plot', xlabel='Year', ylabel='GDP (USD)')
+            scatter_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(years_int))))
+            ax4.scatter(years_int, country_data, c=scatter_colors, s=120, alpha=0.85,
+                       edgecolors=colors_config['text_primary'], linewidth=0.5, zorder=5)
+            ax4.yaxis.set_major_formatter(FuncFormatter(
+                lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
+            ))
         
         fig.tight_layout()
         self.display_plot(fig)
@@ -1332,9 +1633,12 @@ class GDPDashboard:
         # Pehle se jo graph hai wo clear karo - using map
         list(map(lambda w: w.destroy(), self.viz_frame.winfo_children()))
         
+        colors = self.config.get('colors')
         canvas = FigureCanvasTkAgg(fig, master=self.viz_frame)
         canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        widget = canvas.get_tk_widget()
+        widget.configure(bg=colors['dark'])
+        widget.pack(fill=tk.BOTH, expand=True)
         
         # Visualization tab par switch karo
         self.notebook.select(self.viz_frame)
@@ -1374,6 +1678,7 @@ class GDPDashboard:
 
 def main():
     root = tk.Tk()
+    style = ttkb.Style('vapor')
     app = GDPDashboard(root)
     root.mainloop()
 
