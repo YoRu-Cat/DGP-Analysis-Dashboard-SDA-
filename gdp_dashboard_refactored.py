@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import warnings
 import numpy as np
+from functools import reduce
 
 from data_loader import ConfigLoader, GDPDataLoader
 from data_processor import GDPDataProcessor
@@ -166,7 +167,7 @@ class GDPDashboard:
         
         self.analysis_type = tk.StringVar(value=analyses[0]['value'])
         
-        for analysis in analyses:
+        def create_radio(analysis):
             rb = tk.Radiobutton(
                 parent,
                 text=analysis['name'],
@@ -177,14 +178,25 @@ class GDPDashboard:
                 command=self.on_analysis_change
             )
             rb.pack(anchor=tk.W, padx=20, pady=2)
+            return rb
+        
+        list(map(create_radio, analyses))
     
     def _create_country_selection(self, parent):
         colors = self.config.get('colors')
         
+        # Use phase1_filters.country as default if available
+        phase1_filters = self.config.get('phase1_filters')
+        default_country = (
+            phase1_filters.get('country', self.countries[0])
+            if phase1_filters and phase1_filters.get('country') in self.countries
+            else self.countries[0]
+        )
+        
         # Pehla country dropdown
         tk.Label(parent, text="Primary Country:", bg=colors['white'], 
                 font=('Arial', 9, 'bold')).pack(anchor=tk.W, padx=20, pady=(5, 2))
-        self.country_var = tk.StringVar(value=self.countries[0])
+        self.country_var = tk.StringVar(value=default_country)
         country_combo = ttk.Combobox(parent, textvariable=self.country_var, 
                                      values=self.countries, width=30, state='readonly')
         country_combo.pack(padx=20, pady=(0, 10))
@@ -203,8 +215,18 @@ class GDPDashboard:
                                          command=self.compare_listbox.yview)
         self.compare_listbox.configure(yscrollcommand=compare_scrollbar.set)
         
-        for country in self.countries:
-            self.compare_listbox.insert(tk.END, country)
+        # Populate listbox using map
+        list(map(lambda country: self.compare_listbox.insert(tk.END, country), self.countries))
+        
+        # Pre-select compute_countries from config
+        phase1_ops = self.config.get('phase1_operations')
+        if phase1_ops:
+            compute_countries = phase1_ops.get('compute_countries', [])
+            all_countries_list = list(self.countries)
+            list(map(
+                lambda c: self.compare_listbox.selection_set(all_countries_list.index(c)) if c in all_countries_list else None,
+                compute_countries
+            ))
         
         self.compare_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         compare_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -213,7 +235,15 @@ class GDPDashboard:
     def _create_continent_selection(self, parent):
         colors = self.config.get('colors')
         
-        self.continent_var = tk.StringVar(value=self.continents[0] if self.continents else "")
+        # Use phase1_filters.region as default if available
+        phase1_filters = self.config.get('phase1_filters')
+        default_continent = (
+            phase1_filters.get('region', self.continents[0])
+            if phase1_filters and phase1_filters.get('region') in self.continents
+            else (self.continents[0] if self.continents else "")
+        )
+        
+        self.continent_var = tk.StringVar(value=default_continent)
         continent_combo = ttk.Combobox(parent, textvariable=self.continent_var, 
                                       values=self.continents, width=30, state='readonly')
         continent_combo.pack(padx=20, pady=(0, 10))
@@ -222,6 +252,14 @@ class GDPDashboard:
     def _create_year_range_selection(self, parent):
         colors = self.config.get('colors')
         
+        # Use phase1_filters.year as default end year if available
+        phase1_filters = self.config.get('phase1_filters')
+        default_end_year = str(self.year_columns[-1])
+        if phase1_filters:
+            configured_year = phase1_filters.get('year', '')
+            if configured_year and int(configured_year) in self.year_columns:
+                default_end_year = configured_year
+        
         year_frame = tk.Frame(parent, bg=colors['white'])
         year_frame.pack(padx=20, pady=(0, 10), fill=tk.X)
         
@@ -229,16 +267,16 @@ class GDPDashboard:
             row=0, column=0, sticky=tk.W, padx=(0, 5))
         self.start_year_var = tk.StringVar(value=str(self.year_columns[0]))
         start_year_combo = ttk.Combobox(year_frame, textvariable=self.start_year_var, 
-                                       values=[str(y) for y in self.year_columns], 
+                                       values=list(map(str, self.year_columns)), 
                                        width=10, state='readonly')
         start_year_combo.grid(row=0, column=1, padx=(0, 10))
         start_year_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
         
         tk.Label(year_frame, text="To:", bg=colors['white'], font=('Arial', 9)).grid(
             row=0, column=2, sticky=tk.W, padx=(0, 5))
-        self.end_year_var = tk.StringVar(value=str(self.year_columns[-1]))
+        self.end_year_var = tk.StringVar(value=default_end_year)
         end_year_combo = ttk.Combobox(year_frame, textvariable=self.end_year_var, 
-                                     values=[str(y) for y in self.year_columns], 
+                                     values=list(map(str, self.year_columns)), 
                                      width=10, state='readonly')
         end_year_combo.grid(row=0, column=3)
         end_year_combo.bind('<<ComboboxSelected>>', lambda e: self.on_selection_change())
@@ -395,7 +433,7 @@ class GDPDashboard:
         if start_year > end_year:
             start_year, end_year = end_year, start_year
             
-        return [y for y in self.year_columns if start_year <= y <= end_year]
+        return list(filter(lambda y: start_year <= y <= end_year, self.year_columns))
     
     def perform_analysis(self):
         # Jo analysis select hai wo chalaao
@@ -462,13 +500,12 @@ class GDPDashboard:
         selected_indices = self.compare_listbox.curselection()
         
         # Primary country ko list mein shuru mein daalo
-        countries = [primary_country]
-        
-        # Selected countries ko add karo (agar primary country already selected hai to skip karo)
-        for i in selected_indices:
-            country = self.compare_listbox.get(i)
-            if country != primary_country:
-                countries.append(country)
+        # Add selected countries (skip if primary already selected) using filter
+        selected_countries = list(filter(
+            lambda c: c != primary_country,
+            map(lambda i: self.compare_listbox.get(i), selected_indices)
+        ))
+        countries = [primary_country] + selected_countries
         
         # Check if at least 2 countries are selected
         if len(countries) < 2:
@@ -490,18 +527,20 @@ class GDPDashboard:
         fig = Figure(figsize=tuple(viz_config['figure_size']))
         ax = fig.add_subplot(111)
         
-        colors = plt.cm.tab10(np.linspace(0, 1, len(countries)))
+        color_palette = plt.cm.tab10(np.linspace(0, 1, len(countries)))
         
-        for idx, country in enumerate(countries):
+        def plot_country(idx_country):
+            idx, country = idx_country
             gdp_values = self.processor.get_country_data(country, years)
             if gdp_values is not None:
-                # Primary country ko thicker line aur larger marker se dikhao
-                if country == primary_country:
-                    ax.plot(years, gdp_values, marker='o', label=f"{country} (Primary)", 
-                           linewidth=3, markersize=5, color=colors[idx])
-                else:
-                    ax.plot(years, gdp_values, marker='o', label=country, 
-                           linewidth=2, markersize=3, color=colors[idx])
+                lw, ms, label = (
+                    (3, 5, f"{country} (Primary)") if country == primary_country
+                    else (2, 3, country)
+                )
+                ax.plot(years, gdp_values, marker='o', label=label,
+                       linewidth=lw, markersize=ms, color=color_palette[idx])
+        
+        list(map(plot_country, enumerate(countries)))
         
         ax.set_xlabel('Year', fontsize=12, fontweight='bold')
         ax.set_ylabel('GDP (USD)', fontsize=12, fontweight='bold')
@@ -569,14 +608,18 @@ class GDPDashboard:
         ax3.set_xlabel('Average GDP (USD)')
         ax3.ticklabel_format(style='plain', axis='x')
         
-        # Plot 4: GDP distribution
-        ax4 = fig.add_subplot(224)
-        latest_gdp = continent_data[latest_year].dropna()
-        ax4.hist(latest_gdp, bins=viz_config['histogram_bins'], color='#9b59b6', edgecolor='black', alpha=0.7)
-        ax4.set_title(f'GDP Distribution in {latest_year}', fontweight='bold')
-        ax4.set_xlabel('GDP (USD)')
-        ax4.set_ylabel('Number of Countries')
-        ax4.ticklabel_format(style='plain', axis='x')
+        # Plot 4: GDP distribution (controlled by enable_histogram config)
+        phase1_viz = self.config.get('phase1_visualizations')
+        enable_histogram = phase1_viz.get('enable_histogram', True) if phase1_viz else True
+        
+        if enable_histogram:
+            ax4 = fig.add_subplot(224)
+            latest_gdp = continent_data[latest_year].dropna()
+            ax4.hist(latest_gdp, bins=viz_config['histogram_bins'], color='#9b59b6', edgecolor='black', alpha=0.7)
+            ax4.set_title(f'GDP Distribution in {latest_year}', fontweight='bold')
+            ax4.set_xlabel('GDP (USD)')
+            ax4.set_ylabel('Number of Countries')
+            ax4.ticklabel_format(style='plain', axis='x')
         
         fig.tight_layout()
         self.display_plot(fig)
@@ -605,11 +648,12 @@ class GDPDashboard:
         ax.ticklabel_format(style='plain', axis='x')
         ax.grid(axis='x', alpha=0.3)
         
-        # Value labels lagao bars par
-        for bar, value in zip(bars, gdp_list):
-            ax.text(value, bar.get_y() + bar.get_height()/2, 
-                   f' {value:,.0f}', 
-                   va='center', fontsize=8)
+        # Value labels lagao bars par using map
+        list(map(
+            lambda bv: ax.text(bv[1], bv[0].get_y() + bv[0].get_height()/2,
+                              f' {bv[1]:,.0f}', va='center', fontsize=8),
+            zip(bars, gdp_list)
+        ))
         
         fig.tight_layout()
         self.display_plot(fig)
@@ -640,8 +684,11 @@ class GDPDashboard:
         fig = Figure(figsize=tuple(viz_config['figure_size']))
         ax = fig.add_subplot(111)
         
-        colors = [colors_config['success'] if gr >= 0 else colors_config['danger'] for gr in growth_rates]
-        ax.bar(growth_years, growth_rates, color=colors, alpha=0.7, edgecolor='black')
+        bar_colors = list(map(
+            lambda gr: colors_config['success'] if gr >= 0 else colors_config['danger'],
+            growth_rates
+        ))
+        ax.bar(growth_years, growth_rates, color=bar_colors, alpha=0.7, edgecolor='black')
         ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
         ax.set_xlabel('Year', fontsize=12, fontweight='bold')
         ax.set_ylabel('Growth Rate (%)', fontsize=12, fontweight='bold')
@@ -680,11 +727,13 @@ class GDPDashboard:
         
         comparison_data = self.processor.get_year_comparison_data(comparison_years, self.continents)
         
-        for idx, year in enumerate(comparison_years):
-            continent_gdp = [comparison_data[year][continent] for continent in self.continents]
-            
+        def plot_year_bar(idx_year):
+            idx, year = idx_year
+            continent_gdp = list(map(lambda c: comparison_data[year][c], self.continents))
             offset = (idx - len(comparison_years)/2) * width + width/2
             ax.bar(x + offset, continent_gdp, width, label=str(year), color=colors[idx])
+        
+        list(map(plot_year_bar, enumerate(comparison_years)))
         
         ax.set_xlabel('Continent', fontsize=12, fontweight='bold')
         ax.set_ylabel('Total GDP (USD)', fontsize=12, fontweight='bold')
@@ -705,13 +754,12 @@ class GDPDashboard:
         selected_indices = self.compare_listbox.curselection()
         
         # Primary country ko list mein shuru mein daalo
-        countries = [primary_country]
-        
-        # Selected countries ko add karo (agar primary country already selected hai to skip karo)
-        for i in selected_indices:
-            country = self.compare_listbox.get(i)
-            if country != primary_country:
-                countries.append(country)
+        # Selected countries ko add karo using filter (skip primary if already selected)
+        selected_countries = list(filter(
+            lambda c: c != primary_country,
+            map(lambda i: self.compare_listbox.get(i), selected_indices)
+        ))
+        countries = [primary_country] + selected_countries
         
         ui_config = self.config.get('ui')
         if len(countries) < 2:
@@ -748,10 +796,13 @@ class GDPDashboard:
         cbar = fig.colorbar(im, ax=ax)
         cbar.set_label('Correlation Coefficient', rotation=270, labelpad=20)
         
-        for i in range(len(countries)):
-            for j in range(len(countries)):
-                ax.text(j, i, f'{correlation_matrix.iloc[i, j]:.2f}',
-                       ha="center", va="center", color="black", fontsize=7)
+        # Add text annotations using map
+        from itertools import product as iter_product
+        list(map(
+            lambda ij: ax.text(ij[1], ij[0], f'{correlation_matrix.iloc[ij[0], ij[1]]:.2f}',
+                              ha="center", va="center", color="black", fontsize=7),
+            iter_product(range(len(countries)), range(len(countries)))
+        ))
         
         ax.set_title('GDP Correlation Matrix', fontsize=14, fontweight='bold', pad=20)
         
@@ -780,23 +831,32 @@ class GDPDashboard:
         
         valid_regions = list(filter(lambda x: x[1] > 0, regional_gdps))
         
-        region_names = [r[0] for r in valid_regions]
-        gdp_values = [r[1] for r in valid_regions]
+        region_names = list(map(lambda r: r[0], valid_regions))
+        gdp_values = list(map(lambda r: r[1], valid_regions))
+        
+        # Use phase1_visualizations.region_charts config to control which charts to show
+        phase1_viz = self.config.get('phase1_visualizations')
+        region_charts = phase1_viz.get('region_charts', ['pie', 'bar']) if phase1_viz else ['pie', 'bar']
+        num_charts = len(region_charts)
         
         fig = Figure(figsize=tuple(viz_config['figure_size_large']))
         
-        ax1 = fig.add_subplot(121)
-        colors_pie = plt.cm.Set3(range(len(region_names)))
-        ax1.pie(gdp_values, labels=region_names, autopct='%1.1f%%', startangle=90, colors=colors_pie)
-        ax1.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold', fontsize=12)
+        def render_chart(idx_chart):
+            idx, chart_type = idx_chart
+            ax = fig.add_subplot(1, num_charts, idx + 1)
+            if chart_type == 'pie':
+                colors_pie = plt.cm.Set3(range(len(region_names)))
+                ax.pie(gdp_values, labels=region_names, autopct='%1.1f%%', startangle=90, colors=colors_pie)
+                ax.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold', fontsize=12)
+            elif chart_type == 'bar':
+                ax.bar(region_names, gdp_values, color=plt.cm.viridis(np.linspace(0, 1, len(region_names))))
+                ax.set_xlabel('Region', fontweight='bold')
+                ax.set_ylabel('GDP (USD)', fontweight='bold')
+                ax.set_title(f'Regional GDP Comparison ({latest_year})', fontweight='bold', fontsize=12)
+                ax.tick_params(axis='x', rotation=45)
+                ax.ticklabel_format(style='plain', axis='y')
         
-        ax2 = fig.add_subplot(122)
-        bars = ax2.bar(region_names, gdp_values, color=plt.cm.viridis(np.linspace(0, 1, len(region_names))))
-        ax2.set_xlabel('Region', fontweight='bold')
-        ax2.set_ylabel('GDP (USD)', fontweight='bold')
-        ax2.set_title(f'Regional GDP Comparison ({latest_year})', fontweight='bold', fontsize=12)
-        ax2.tick_params(axis='x', rotation=45)
-        ax2.ticklabel_format(style='plain', axis='y')
+        list(map(render_chart, enumerate(region_charts)))
         
         fig.tight_layout()
         self.display_plot(fig)
@@ -804,10 +864,10 @@ class GDPDashboard:
         self.show_phase1_regional_statistics(region_names, gdp_values, latest_year)
     
     def plot_phase1_year_analysis(self):
-        """Year-specific GDP analysis with Line and Scatter plots"""
+        """Year-specific GDP analysis - chart types driven by phase1_visualizations.year_charts"""
         country = self.country_var.get()
         years = self.get_year_range()
-        years_int = [int(y) for y in years]
+        years_int = list(map(int, years))
         
         country_data = self.processor.get_country_data(country, years)
         
@@ -818,25 +878,34 @@ class GDPDashboard:
         viz_config = self.config.get('visualization')
         colors_config = self.config.get('colors')
         
+        # Use phase1_visualizations.year_charts config
+        phase1_viz = self.config.get('phase1_visualizations')
+        year_charts = phase1_viz.get('year_charts', ['line', 'scatter']) if phase1_viz else ['line', 'scatter']
+        num_charts = len(year_charts)
+        
         fig = Figure(figsize=tuple(viz_config['figure_size_large']))
         
-        ax1 = fig.add_subplot(121)
-        ax1.plot(years_int, country_data, marker='o', linewidth=2, color=colors_config['primary'], label=country)
-        ax1.set_xlabel('Year', fontweight='bold')
-        ax1.set_ylabel('GDP (USD)', fontweight='bold')
-        ax1.set_title(f'{country} - GDP Trend Over Years', fontweight='bold', fontsize=12)
-        ax1.grid(True, alpha=0.3)
-        ax1.legend()
-        ax1.ticklabel_format(style='plain', axis='y')
+        def render_year_chart(idx_chart):
+            idx, chart_type = idx_chart
+            ax = fig.add_subplot(1, num_charts, idx + 1)
+            if chart_type == 'line':
+                ax.plot(years_int, country_data, marker='o', linewidth=2, color=colors_config['primary'], label=country)
+                ax.set_xlabel('Year', fontweight='bold')
+                ax.set_ylabel('GDP (USD)', fontweight='bold')
+                ax.set_title(f'{country} - GDP Trend Over Years', fontweight='bold', fontsize=12)
+                ax.grid(True, alpha=0.3)
+                ax.legend()
+                ax.ticklabel_format(style='plain', axis='y')
+            elif chart_type == 'scatter':
+                colors_scatter = plt.cm.coolwarm(np.linspace(0, 1, len(years_int)))
+                ax.scatter(years_int, country_data, c=colors_scatter, s=100, alpha=0.6, edgecolors='black')
+                ax.set_xlabel('Year', fontweight='bold')
+                ax.set_ylabel('GDP (USD)', fontweight='bold')
+                ax.set_title(f'{country} - GDP Scatter Analysis', fontweight='bold', fontsize=12)
+                ax.grid(True, alpha=0.3)
+                ax.ticklabel_format(style='plain', axis='y')
         
-        ax2 = fig.add_subplot(122)
-        colors_scatter = plt.cm.coolwarm(np.linspace(0, 1, len(years_int)))
-        ax2.scatter(years_int, country_data, c=colors_scatter, s=100, alpha=0.6, edgecolors='black')
-        ax2.set_xlabel('Year', fontweight='bold')
-        ax2.set_ylabel('GDP (USD)', fontweight='bold')
-        ax2.set_title(f'{country} - GDP Scatter Analysis', fontweight='bold', fontsize=12)
-        ax2.grid(True, alpha=0.3)
-        ax2.ticklabel_format(style='plain', axis='y')
+        list(map(render_year_chart, enumerate(year_charts)))
         
         fig.tight_layout()
         self.display_plot(fig)
@@ -844,40 +913,62 @@ class GDPDashboard:
         self.show_country_statistics(country, years_int, country_data)
     
     def plot_phase1_complete_analysis(self):
+        """Complete analysis driven by phase1 config - charts, regions, and countries"""
         phase1_config = self.config.get('phase1_operations')
-        if phase1_config:
-            regions = phase1_config.get('compute_regions', self.continents[:5])
-        else:
-            regions = self.continents[:5]
+        regions = phase1_config.get('compute_regions', self.continents[:5]) if phase1_config else self.continents[:5]
+        
+        # Use phase1_visualizations config for chart types
+        phase1_viz = self.config.get('phase1_visualizations')
+        region_charts = phase1_viz.get('region_charts', ['pie', 'bar']) if phase1_viz else ['pie', 'bar']
+        year_charts = phase1_viz.get('year_charts', ['line', 'scatter']) if phase1_viz else ['line', 'scatter']
         
         country = self.country_var.get()
         years = self.get_year_range()
-        years_int = [int(y) for y in years]
+        years_int = list(map(int, years))
         latest_year = years[-1]
         
         viz_config = self.config.get('visualization')
         colors_config = self.config.get('colors')
         
-        fig = Figure(figsize=(14, 10))
+        fig = Figure(figsize=tuple(viz_config.get('figure_size_large', [14, 10])))
         
+        # Build regional GDP data using map/filter
+        regional_gdp_pairs = list(filter(
+            lambda pair: pair[1] > 0,
+            map(lambda region: (region, self.df[self.df['Continent'] == region][latest_year].sum()), regions)
+        ))
+        valid_region_names = list(map(lambda p: p[0], regional_gdp_pairs))
+        valid_region_values = list(map(lambda p: p[1], regional_gdp_pairs))
+        
+        # Subplot 1: First region chart type (pie or bar)
         ax1 = fig.add_subplot(221)
-        regional_gdps = {region: self.df[self.df['Continent'] == region][latest_year].sum() for region in regions}
-        valid_regions = {k: v for k, v in regional_gdps.items() if v > 0}
+        if 'pie' in region_charts:
+            ax1.pie(valid_region_values, labels=valid_region_names, autopct='%1.1f%%', startangle=90)
+            ax1.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold')
+        elif 'bar' in region_charts:
+            ax1.bar(valid_region_names, valid_region_values, color=plt.cm.viridis(np.linspace(0, 1, len(valid_region_names))))
+            ax1.set_title(f'Regional GDP Bar Chart ({latest_year})', fontweight='bold')
+            ax1.tick_params(axis='x', rotation=45)
+            ax1.ticklabel_format(style='plain', axis='y')
         
-        ax1.pie(valid_regions.values(), labels=valid_regions.keys(), autopct='%1.1f%%', startangle=90)
-        ax1.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold')
-        
+        # Subplot 2: Second region chart type
         ax2 = fig.add_subplot(222)
-        ax2.bar(valid_regions.keys(), valid_regions.values(), color=plt.cm.viridis(np.linspace(0, 1, len(valid_regions))))
-        ax2.set_xlabel('Region', fontweight='bold')
-        ax2.set_ylabel('GDP (USD)', fontweight='bold')
-        ax2.set_title(f'Regional GDP Bar Chart ({latest_year})', fontweight='bold')
-        ax2.tick_params(axis='x', rotation=45)
-        ax2.ticklabel_format(style='plain', axis='y')
+        if 'bar' in region_charts:
+            ax2.bar(valid_region_names, valid_region_values, color=plt.cm.viridis(np.linspace(0, 1, len(valid_region_names))))
+            ax2.set_xlabel('Region', fontweight='bold')
+            ax2.set_ylabel('GDP (USD)', fontweight='bold')
+            ax2.set_title(f'Regional GDP Bar Chart ({latest_year})', fontweight='bold')
+            ax2.tick_params(axis='x', rotation=45)
+            ax2.ticklabel_format(style='plain', axis='y')
+        elif 'pie' in region_charts:
+            ax2.pie(valid_region_values, labels=valid_region_names, autopct='%1.1f%%', startangle=90)
+            ax2.set_title(f'Regional GDP Distribution ({latest_year})', fontweight='bold')
         
-        ax3 = fig.add_subplot(223)
         country_data = self.processor.get_country_data(country, years)
-        if country_data is not None:
+        
+        # Subplot 3: First year chart type (line or scatter)
+        ax3 = fig.add_subplot(223)
+        if country_data is not None and 'line' in year_charts:
             ax3.plot(years_int, country_data, marker='o', linewidth=2, color=colors_config['success'])
             ax3.set_xlabel('Year', fontweight='bold')
             ax3.set_ylabel('GDP (USD)', fontweight='bold')
@@ -885,8 +976,9 @@ class GDPDashboard:
             ax3.grid(True, alpha=0.3)
             ax3.ticklabel_format(style='plain', axis='y')
         
+        # Subplot 4: Second year chart type
         ax4 = fig.add_subplot(224)
-        if country_data is not None:
+        if country_data is not None and 'scatter' in year_charts:
             ax4.scatter(years_int, country_data, c=plt.cm.coolwarm(np.linspace(0, 1, len(years_int))), 
                        s=100, alpha=0.6, edgecolors='black')
             ax4.set_xlabel('Year', fontweight='bold')
@@ -913,8 +1005,12 @@ class GDPDashboard:
         stats = f"Regional GDP Analysis ({year})\n"
         stats += "=" * 60 + "\n\n"
         
-        for region, gdp, pct in zip(region_names, gdp_values, percentages):
-            stats += f"{region:20s}: ${gdp:,.0f} ({pct:.1f}%)\n"
+        # Build region lines using reduce over zipped data
+        stats += reduce(
+            lambda acc, item: acc + f"{item[0]:20s}: ${item[1]:,.0f} ({item[2]:.1f}%)\n",
+            zip(region_names, gdp_values, percentages),
+            ""
+        )
         
         stats += "\n" + "-" * 60 + "\n"
         stats += f"Total GDP: ${total_gdp:,.0f}\n"
@@ -952,12 +1048,17 @@ class GDPDashboard:
         ui_config = self.config.get('ui')
         world_stats = self.processor.get_world_statistics(latest_year)
         
+        # Get statistical_operation from config
+        phase1_ops = self.config.get('phase1_operations')
+        stat_operation = phase1_ops.get('statistical_operation', 'average') if phase1_ops else 'average'
+        
         # Get selected primary country
         selected_country = self.country_var.get()
         
         stats_text = "=" * 80 + "\n"
         stats_text += " " * 25 + "GDP STATISTICAL SUMMARY\n"
         stats_text += "=" * 80 + "\n\n"
+        stats_text += f"Default Statistical Operation: {stat_operation.upper()}\n\n"
         
         # Show primary country statistics first
         stats_text += f"SELECTED COUNTRY: {selected_country}\n"
@@ -975,7 +1076,7 @@ class GDPDashboard:
                 stats_text += f"Std Deviation: ${country_stats['std']:,.0f}\n"
                 
                 # Calculate growth
-                growth_summary = self.processor.calculate_growth_summary(country_data, [int(y) for y in years])
+                growth_summary = self.processor.calculate_growth_summary(country_data, list(map(int, years)))
                 if growth_summary:
                     stats_text += f"Total Growth: {growth_summary['total_growth']:.2f}%\n"
                     if 'avg_annual_growth' in growth_summary:
@@ -1001,11 +1102,13 @@ class GDPDashboard:
         top_countries = self.processor.get_top_countries(latest_year, top_n)
         stats_text += f"TOP {top_n} COUNTRIES IN {latest_year}\n"
         stats_text += "-" * 80 + "\n"
-        for idx, row in enumerate(top_countries.iterrows(), 1):
-            country = row[1]['Country Name']
-            gdp = row[1][latest_year]
-            continent = row[1]['Continent']
-            stats_text += f"{idx:2d}. {country:30s} ${gdp:20,.0f}  [{continent}]\n"
+        
+        # Build top countries text using reduce
+        stats_text += reduce(
+            lambda acc, pair: acc + f"{pair[0]:2d}. {pair[1][1]['Country Name']:30s} ${pair[1][1][latest_year]:20,.0f}  [{pair[1][1]['Continent']}]\n",
+            enumerate(top_countries.iterrows(), 1),
+            ""
+        )
         
         stats_text += "\n"
         
@@ -1014,10 +1117,16 @@ class GDPDashboard:
         stats_text += f"{'Continent':<20} {'Total GDP':<25} {'Avg GDP':<25} {'Countries':<10}\n"
         stats_text += "-" * 80 + "\n"
         
-        for continent in self.continents:
-            summary = self.processor.get_continent_summary(continent, latest_year)
-            if summary:
-                stats_text += f"{continent:<20} ${summary['total_gdp']:<24,.0f} ${summary['avg_gdp']:<24,.0f} {summary['country_count']:<10}\n"
+        # Build continent stats using reduce
+        stats_text += reduce(
+            lambda acc, continent: (
+                acc + f"{continent:<20} ${summary['total_gdp']:<24,.0f} ${summary['avg_gdp']:<24,.0f} {summary['country_count']:<10}\n"
+                if (summary := self.processor.get_continent_summary(continent, latest_year))
+                else acc
+            ),
+            self.continents,
+            ""
+        )
         
         stats_text += "\n" + "=" * 80 + "\n"
         
@@ -1068,12 +1177,16 @@ class GDPDashboard:
         stats_text += f"{'Country':<30} {'GDP in ' + str(latest_year):<25} {'Avg GDP':<25}\n"
         stats_text += "-" * 80 + "\n"
         
-        for country in countries:
-            country_data = self.df[self.df['Country Name'] == country]
-            if not country_data.empty:
-                latest_gdp = country_data[latest_year].values[0]
-                avg_gdp = country_data[years].mean(axis=1).values[0]
-                stats_text += f"{country:<30} ${latest_gdp:<24,.0f} ${avg_gdp:<24,.0f}\n"
+        # Build comparison rows using reduce
+        stats_text += reduce(
+            lambda acc, country: (
+                acc + f"{country:<30} ${country_data[latest_year].values[0]:<24,.0f} ${country_data[years].mean(axis=1).values[0]:<24,.0f}\n"
+                if not (country_data := self.df[self.df['Country Name'] == country]).empty
+                else acc
+            ),
+            countries,
+            ""
+        )
         
         stats_text += "\n" + "=" * 80 + "\n"
         
@@ -1099,10 +1212,13 @@ class GDPDashboard:
         
         stats_text += f"TOP 5 COUNTRIES IN {latest_year}\n"
         stats_text += "-" * 80 + "\n"
-        for idx, row in enumerate(summary['top_countries'].iterrows(), 1):
-            country = row[1]['Country Name']
-            gdp = row[1][latest_year]
-            stats_text += f"{idx}. {country:<40} ${gdp:,.0f}\n"
+        
+        # Build top 5 rows using reduce
+        stats_text += reduce(
+            lambda acc, pair: acc + f"{pair[0]}. {pair[1][1]['Country Name']:<40} ${pair[1][1][latest_year]:,.0f}\n",
+            enumerate(summary['top_countries'].iterrows(), 1),
+            ""
+        )
         
         stats_text += "\n" + "=" * 80 + "\n"
         
@@ -1125,11 +1241,12 @@ class GDPDashboard:
         stats_text += f"{'Rank':<6} {'Country':<30} {'GDP':<25} {'Continent':<15}\n"
         stats_text += "-" * 80 + "\n"
         
-        for idx, row in enumerate(top_countries.iterrows(), 1):
-            country = row[1]['Country Name']
-            gdp = row[1][year]
-            continent = row[1]['Continent']
-            stats_text += f"{idx:<6} {country:<30} ${gdp:<24,.0f} {continent:<15}\n"
+        # Build ranking rows using reduce
+        stats_text += reduce(
+            lambda acc, pair: acc + f"{pair[0]:<6} {pair[1][1]['Country Name']:<30} ${pair[1][1][year]:<24,.0f} {pair[1][1]['Continent']:<15}\n",
+            enumerate(top_countries.iterrows(), 1),
+            ""
+        )
         
         stats_text += "\n" + "=" * 80 + "\n"
         
@@ -1137,7 +1254,7 @@ class GDPDashboard:
         self.stats_text.insert(1.0, stats_text)
     
     def show_growth_statistics(self, country, years, growth_rates):
-        valid_rates = [r for r in growth_rates if not np.isnan(r)]
+        valid_rates = list(filter(lambda r: not np.isnan(r), growth_rates))
         
         stats_text = "=" * 80 + "\n"
         stats_text += f"GROWTH RATE STATISTICS FOR {country.upper()}\n"
@@ -1150,8 +1267,8 @@ class GDPDashboard:
             stats_text += f"Min Growth Rate: {min(valid_rates):.2f}% (Year: {years[growth_rates.index(min(valid_rates))]})\n"
             stats_text += f"Std Deviation: {np.std(valid_rates):.2f}%\n\n"
             
-            positive_years = sum(1 for r in valid_rates if r > 0)
-            negative_years = sum(1 for r in valid_rates if r < 0)
+            positive_years = len(list(filter(lambda r: r > 0, valid_rates)))
+            negative_years = len(list(filter(lambda r: r < 0, valid_rates)))
             
             stats_text += f"Years with Positive Growth: {positive_years}\n"
             stats_text += f"Years with Negative Growth: {negative_years}\n"
@@ -1167,18 +1284,21 @@ class GDPDashboard:
         stats_text += "=" * 80 + "\n\n"
         
         stats_text += f"{'Continent':<20}"
-        for year in comparison_years:
-            stats_text += f"{str(year):<15}"
+        stats_text += reduce(lambda acc, year: acc + f"{str(year):<15}", comparison_years, "")
         stats_text += "\n" + "-" * 80 + "\n"
         
         comparison_data = self.processor.get_year_comparison_data(comparison_years, self.continents)
         
-        for continent in self.continents:
-            stats_text += f"{continent:<20}"
-            for year in comparison_years:
-                total = comparison_data[year][continent]
-                stats_text += f"${total/1e12:.2f}T"[:14] + " "
-            stats_text += "\n"
+        # Build continent rows using reduce
+        stats_text += reduce(
+            lambda acc, continent: acc + f"{continent:<20}" + reduce(
+                lambda row, year: row + f"${comparison_data[year][continent]/1e12:.2f}T"[:14] + " ",
+                comparison_years,
+                ""
+            ) + "\n",
+            self.continents,
+            ""
+        )
         
         stats_text += "\n" + "=" * 80 + "\n"
         
@@ -1195,8 +1315,12 @@ class GDPDashboard:
         stats_text += "HIGHEST CORRELATIONS:\n"
         stats_text += "-" * 80 + "\n"
         
-        for i, (country1, country2, corr) in enumerate(correlations, 1):
-            stats_text += f"{i:2d}. {country1:25s} <-> {country2:25s} : {corr:6.3f}\n"
+        # Build correlation rows using reduce
+        stats_text += reduce(
+            lambda acc, pair: acc + f"{pair[0]:2d}. {pair[1][0]:25s} <-> {pair[1][1]:25s} : {pair[1][2]:6.3f}\n",
+            enumerate(correlations, 1),
+            ""
+        )
         
         stats_text += "\n" + "=" * 80 + "\n"
         
@@ -1205,9 +1329,8 @@ class GDPDashboard:
     
     def display_plot(self, fig):
         # Graph ko display karo
-        # Pehle se jo graph hai wo clear karo
-        for widget in self.viz_frame.winfo_children():
-            widget.destroy()
+        # Pehle se jo graph hai wo clear karo - using map
+        list(map(lambda w: w.destroy(), self.viz_frame.winfo_children()))
         
         canvas = FigureCanvasTkAgg(fig, master=self.viz_frame)
         canvas.draw()
@@ -1217,9 +1340,8 @@ class GDPDashboard:
         self.notebook.select(self.viz_frame)
     
     def clear_visualization(self):
-        # Saari visualizations clear kar do
-        for widget in self.viz_frame.winfo_children():
-            widget.destroy()
+        # Saari visualizations clear kar do - using map
+        list(map(lambda w: w.destroy(), self.viz_frame.winfo_children()))
         
         self.stats_text.delete(1.0, tk.END)
         

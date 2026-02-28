@@ -5,6 +5,7 @@
 import numpy as np
 import pandas as pd
 from functools import reduce
+from itertools import combinations
 
 
 class GDPDataProcessor:
@@ -41,8 +42,8 @@ class GDPDataProcessor:
         
         valid_growth = list(filter(lambda x: x[0] is not None, growth_data))
         
-        growth_rates = [rate for rate, _ in valid_growth]
-        growth_years = [year for _, year in valid_growth]
+        growth_rates = list(map(lambda x: x[0], valid_growth))
+        growth_years = list(map(lambda x: x[1], valid_growth))
         
         return growth_rates, growth_years
     
@@ -60,15 +61,15 @@ class GDPDataProcessor:
     
     def get_correlation_matrix(self, countries, years):
         """Build correlation matrix for selected countries"""
-        data_dict = {}
-        for country in countries:
-            gdp_values = self.get_country_data(country, years)
-            if gdp_values is not None:
-                data_dict[country] = gdp_values
+        country_data_pairs = list(filter(
+            lambda pair: pair[1] is not None,
+            map(lambda c: (c, self.get_country_data(c, years)), countries)
+        ))
         
-        if not data_dict:
+        if not country_data_pairs:
             return None
         
+        data_dict = dict(country_data_pairs)
         corr_df = pd.DataFrame(data_dict)
         return corr_df.corr()
     
@@ -140,25 +141,22 @@ class GDPDataProcessor:
     
     def get_year_comparison_data(self, comparison_years, continents):
         """Get GDP data for year comparison across continents"""
-        data = {
-            year: {
-                continent: self.get_continent_data(continent)[year].sum()
-                for continent in continents
-            }
-            for year in comparison_years
-        }
-        
-        return data
+        return dict(map(
+            lambda year: (year, dict(map(
+                lambda continent: (continent, self.get_continent_data(continent)[year].sum()),
+                continents
+            ))),
+            comparison_years
+        ))
     
     def get_top_correlations(self, correlation_matrix, n=10):
         """Get top N correlations from correlation matrix"""
         countries = correlation_matrix.columns
         
-        correlations = [
-            (countries[i], countries[j], correlation_matrix.iloc[i, j])
-            for i in range(len(countries))
-            for j in range(i+1, len(countries))
-        ]
+        correlations = list(map(
+            lambda pair: (pair[0], pair[1], correlation_matrix.loc[pair[0], pair[1]]),
+            combinations(countries, 2)
+        ))
         
         sorted_correlations = sorted(correlations, key=lambda x: abs(x[2]), reverse=True)
         return sorted_correlations[:n]

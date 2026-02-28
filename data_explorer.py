@@ -2,21 +2,47 @@
 # Command line se jaldi se data dekh sakte hain
 
 import pandas as pd
+import json
+import os
 import sys
+from functools import reduce
 
 
-def load_data():
-    # Data load karo
+def load_config(config_path='config.json'):
+    """Load configuration from config.json"""
+    if not os.path.exists(config_path):
+        print(f"Config file not found: {config_path}")
+        return None
+    
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def load_data(config):
+    """Data load karo using config file path"""
     try:
-        df = pd.read_excel('gdp_with_continent_filled.xlsx')
-        return df
+        file_path = config['data']['file_path']
+        file_extension = os.path.splitext(file_path)[1].lower()
+        
+        loader_map = {
+            '.csv': lambda fp: pd.read_csv(fp),
+            '.xlsx': lambda fp: pd.read_excel(fp),
+            '.xls': lambda fp: pd.read_excel(fp)
+        }
+        
+        loader = loader_map.get(file_extension)
+        if loader is None:
+            print(f"Unsupported file format: {file_extension}")
+            return None
+        
+        return loader(file_path)
     except Exception as e:
         print(f"Error loading data: {e}")
         return None
 
 
 def show_menu():
-    # Menu options dikhao
+    """Menu options dikhao"""
     print("\n" + "="*60)
     print("  GDP DATA EXPLORER")
     print("="*60)
@@ -34,35 +60,40 @@ def show_menu():
 
 
 def show_all_countries(df):
-    # Saare countries ki list
+    """Saare countries ki list"""
     countries = sorted(df['Country Name'].unique())
     print(f"\nTotal Countries: {len(countries)}\n")
-    for i, country in enumerate(countries, 1):
-        print(f"{i:3d}. {country}")
+    list(map(
+        lambda pair: print(f"{pair[0]:3d}. {pair[1]}"),
+        enumerate(countries, 1)
+    ))
 
 
 def show_all_continents(df):
-    # Saare continents aur unke countries
+    """Saare continents aur unke countries"""
     continents = sorted(df['Continent'].dropna().unique())
     print(f"\nTotal Continents: {len(continents)}\n")
-    for continent in continents:
-        count = len(df[df['Continent'] == continent])
-        print(f"  {continent:<20s} ({count} countries)")
+    list(map(
+        lambda continent: print(f"  {continent:<20s} ({len(df[df['Continent'] == continent])} countries)"),
+        continents
+    ))
 
 
 def search_country(df, search_term):
-    # Naam se country search karo
+    """Naam se country search karo"""
     matches = df[df['Country Name'].str.contains(search_term, case=False, na=False)]
     if matches.empty:
         print(f"\nNo countries found matching '{search_term}'")
     else:
         print(f"\nFound {len(matches)} match(es):\n")
-        for _, row in matches.iterrows():
-            print(f"  {row['Country Name']} ({row['Country Code']}) - {row['Continent']}")
+        list(map(
+            lambda row: print(f"  {row[1]['Country Name']} ({row[1]['Country Code']}) - {row[1]['Continent']}"),
+            matches.iterrows()
+        ))
 
 
 def show_country_gdp_for_year(df, country, year):
-    # Specific country aur year ka GDP dikhao
+    """Specific country aur year ka GDP dikhao"""
     country_data = df[df['Country Name'].str.lower() == country.lower()]
     if country_data.empty:
         print(f"\nCountry '{country}' not found")
@@ -83,25 +114,24 @@ def show_country_gdp_for_year(df, country, year):
         print(f"\nInvalid year: {year}")
 
 
-def show_top_countries(df, n=10):
-    # Top N countries by GDP
-    year_columns = [col for col in df.columns if isinstance(col, int)]
-    latest_year = max(year_columns)
+def show_top_countries(df, config, n=10):
+    """Top N countries by GDP using config default_top_n"""
+    year_columns = sorted(list(filter(lambda col: isinstance(col, int), df.columns)))
+    latest_year = year_columns[-1]
     
     top_countries = df.nlargest(n, latest_year)
     print(f"\nTop {n} Countries by GDP in {latest_year}:\n")
     print(f"{'Rank':<6} {'Country':<35} {'GDP':<25} {'Continent':<15}")
     print("-"*85)
     
-    for i, row in enumerate(top_countries.iterrows(), 1):
-        country = row[1]['Country Name']
-        gdp = row[1][latest_year]
-        continent = row[1]['Continent']
-        print(f"{i:<6} {country:<35} ${gdp:<24,.0f} {continent:<15}")
+    list(map(
+        lambda pair: print(f"{pair[0]:<6} {pair[1][1]['Country Name']:<35} ${pair[1][1][latest_year]:<24,.0f} {pair[1][1]['Continent']:<15}"),
+        enumerate(top_countries.iterrows(), 1)
+    ))
 
 
 def show_continent_countries(df, continent):
-    # Ek continent ke saare countries
+    """Ek continent ke saare countries"""
     continent_data = df[df['Continent'].str.lower() == continent.lower()]
     if continent_data.empty:
         print(f"\nContinent '{continent}' not found")
@@ -109,15 +139,19 @@ def show_continent_countries(df, continent):
     
     countries = sorted(continent_data['Country Name'].unique())
     print(f"\nCountries in {continent} ({len(countries)} total):\n")
-    for i, country in enumerate(countries, 1):
-        print(f"{i:3d}. {country}")
+    list(map(
+        lambda pair: print(f"{pair[0]:3d}. {pair[1]}"),
+        enumerate(countries, 1)
+    ))
 
 
-def show_summary(df):
-    # Dataset ka summary dikhao
-    year_columns = [col for col in df.columns if isinstance(col, int)]
-    year_columns.sort()
+def show_summary(df, config):
+    """Dataset ka summary dikhao using config"""
+    year_columns = sorted(list(filter(lambda col: isinstance(col, int), df.columns)))
     latest_year = year_columns[-1]
+    
+    phase1 = config.get('phase1_filters', {})
+    stat_op = config.get('phase1_operations', {}).get('statistical_operation', 'average')
     
     print("\n" + "="*60)
     print("  DATASET SUMMARY")
@@ -134,13 +168,21 @@ def show_summary(df):
     print(f"  Median GDP: ${latest_data.median():,.0f}")
     print(f"  Max GDP: ${latest_data.max():,.0f}")
     print(f"  Min GDP: ${latest_data.min():,.0f}")
+    
+    # Use phase1_filters config to show default focus
+    if phase1:
+        print(f"\nDefault Focus (from config):")
+        print(f"  Region: {phase1.get('region', 'N/A')}")
+        print(f"  Year: {phase1.get('year', 'N/A')}")
+        print(f"  Country: {phase1.get('country', 'N/A')}")
+        print(f"  Statistical Operation: {stat_op}")
+    
     print("="*60)
 
 
 def show_available_years(df):
-    # Dataset mein konse years hain
-    year_columns = [col for col in df.columns if isinstance(col, int)]
-    year_columns.sort()
+    """Dataset mein konse years hain"""
+    year_columns = sorted(list(filter(lambda col: isinstance(col, int), df.columns)))
     
     print(f"\nAvailable Years ({len(year_columns)} total):")
     print(f"From {year_columns[0]} to {year_columns[-1]}")
@@ -148,7 +190,7 @@ def show_available_years(df):
 
 
 def compare_countries(df, country1, country2):
-    # Do countries ka comparison
+    """Do countries ka comparison"""
     data1 = df[df['Country Name'].str.lower() == country1.lower()]
     data2 = df[df['Country Name'].str.lower() == country2.lower()]
     
@@ -159,9 +201,9 @@ def compare_countries(df, country1, country2):
         print(f"\nCountry '{country2}' not found")
         return
     
-    year_columns = [col for col in df.columns if isinstance(col, int)]
-    latest_year = max(year_columns)
-    first_year = min(year_columns)
+    year_columns = sorted(list(filter(lambda col: isinstance(col, int), df.columns)))
+    latest_year = year_columns[-1]
+    first_year = year_columns[0]
     
     gdp1_latest = data1[latest_year].values[0]
     gdp2_latest = data2[latest_year].values[0]
@@ -178,25 +220,71 @@ def compare_countries(df, country1, country2):
     print(f"{'GDP in ' + str(latest_year):<25} ${gdp1_latest:<24,.0f} ${gdp2_latest:<24,.0f}")
     print(f"{'GDP in ' + str(first_year):<25} ${gdp1_first:<24,.0f} ${gdp2_first:<24,.0f}")
     
-    if not pd.isna(gdp1_first) and gdp1_first != 0:
-        growth1 = ((gdp1_latest - gdp1_first) / gdp1_first) * 100
-        print(f"{'Total Growth':<25} {growth1:<24.2f}%", end="")
-    else:
-        print(f"{'Total Growth':<25} {'N/A':<24}", end="")
-    
-    if not pd.isna(gdp2_first) and gdp2_first != 0:
-        growth2 = ((gdp2_latest - gdp2_first) / gdp2_first) * 100
-        print(f" {growth2:<24.2f}%")
-    else:
-        print(f" {'N/A':<24}")
-    
+    growth1_str = (
+        f"{((gdp1_latest - gdp1_first) / gdp1_first) * 100:<24.2f}%"
+        if not pd.isna(gdp1_first) and gdp1_first != 0
+        else f"{'N/A':<24}"
+    )
+    growth2_str = (
+        f" {((gdp2_latest - gdp2_first) / gdp2_first) * 100:<24.2f}%"
+        if not pd.isna(gdp2_first) and gdp2_first != 0
+        else f" {'N/A':<24}"
+    )
+    print(f"{'Total Growth':<25} {growth1_str}{growth2_str}")
     print(f"{'='*70}\n")
 
 
+def handle_choice(choice, df, config):
+    """Handle a single menu choice - returns whether to continue"""
+    handlers = {
+        '1': lambda: show_all_countries(df),
+        '2': lambda: show_all_continents(df),
+        '3': lambda: search_country(df, input("Enter country name (partial match): ").strip()),
+        '4': lambda: show_country_gdp_for_year(df, input("Enter country name: ").strip(), input("Enter year: ").strip()),
+        '5': lambda: show_top_countries(df, config, int(n) if (n := input("Enter number of top countries (default 10): ").strip()).isdigit() else config.get('ui', {}).get('default_top_n', 10)),
+        '6': lambda: show_continent_countries(df, input("Enter continent name: ").strip()),
+        '7': lambda: show_summary(df, config),
+        '8': lambda: show_available_years(df),
+        '9': lambda: compare_countries(df, input("Enter first country name: ").strip(), input("Enter second country name: ").strip()),
+    }
+    
+    if choice == '0':
+        print("\nThank you for using GDP Data Explorer!")
+        return False
+    
+    handler = handlers.get(choice)
+    if handler:
+        handler()
+        input("\nPress Enter to continue...")
+    else:
+        print("\nInvalid choice. Please try again.")
+        input("\nPress Enter to continue...")
+    
+    return True
+
+
+def run_explorer(df, config):
+    """Recursive main loop - functional alternative to while True"""
+    show_menu()
+    choice = input("\nEnter your choice: ").strip()
+    
+    should_continue = handle_choice(choice, df, config)
+    
+    if should_continue:
+        return run_explorer(df, config)
+    return None
+
+
 def main():
-    # Program start karo
+    """Program start karo"""
     print("\nLoading GDP data...")
-    df = load_data()
+    
+    config = load_config()
+    if config is None:
+        print("Failed to load config. Exiting...")
+        return
+    
+    df = load_data(config)
     
     if df is None:
         print("Failed to load data. Exiting...")
@@ -204,42 +292,8 @@ def main():
     
     print(f"Data loaded successfully! ({len(df)} countries)")
     
-    while True:
-        show_menu()
-        choice = input("\nEnter your choice: ").strip()
-        
-        if choice == '1':
-            show_all_countries(df)
-        elif choice == '2':
-            show_all_continents(df)
-        elif choice == '3':
-            search_term = input("Enter country name (partial match): ").strip()
-            search_country(df, search_term)
-        elif choice == '4':
-            country = input("Enter country name: ").strip()
-            year = input("Enter year: ").strip()
-            show_country_gdp_for_year(df, country, year)
-        elif choice == '5':
-            n = input("Enter number of top countries (default 10): ").strip()
-            n = int(n) if n.isdigit() else 10
-            show_top_countries(df, n)
-        elif choice == '6':
-            continent = input("Enter continent name: ").strip()
-            show_continent_countries(df, continent)
-        elif choice == '7':
-            show_summary(df)
-        elif choice == '8':
-            show_available_years(df)
-        elif choice == '9':
-            country1 = input("Enter first country name: ").strip()
-            country2 = input("Enter second country name: ").strip()
-            compare_countries(df, country1, country2)
-        elif choice == '0':
-            print("\nThank you for using GDP Data Explorer!")
-            break
-        else:
-            print("\nInvalid choice. Please try again.")
-        input("\nPress Enter to continue...")
+    sys.setrecursionlimit(10000)
+    run_explorer(df, config)
 
 
 if __name__ == "__main__":

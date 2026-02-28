@@ -36,7 +36,7 @@ class ConfigLoader:
         """Validate configuration structure"""
         required_sections = ['data', 'ui', 'colors', 'analysis_types', 'visualization']
         
-        missing_sections = [section for section in required_sections if section not in config]
+        missing_sections = list(filter(lambda section: section not in config, required_sections))
         
         if missing_sections:
             raise ValueError(f"Missing required configuration section: {', '.join(missing_sections)}")
@@ -105,16 +105,16 @@ class GDPDataLoader:
             raise ValueError("Loaded data is empty")
         
         required_columns = self.config.get('data', 'required_columns')
-        missing_columns = [col for col in required_columns if col not in self.df.columns]
+        missing_columns = list(filter(lambda col: col not in self.df.columns, required_columns))
         
         if missing_columns:
             raise ValueError(
                 f"Missing required columns in data: {', '.join(missing_columns)}\n"
-                f"Available columns: {', '.join(self.df.columns)}"
+                f"Available columns: {', '.join(map(str, self.df.columns))}"
             )
         
         # Check for year columns (numeric columns)
-        year_cols = [col for col in self.df.columns if isinstance(col, int)]
+        year_cols = list(filter(lambda col: isinstance(col, int), self.df.columns))
         if not year_cols:
             raise ValueError("No year columns found in data (expected numeric column names)")
     
@@ -124,9 +124,9 @@ class GDPDataLoader:
             list(filter(lambda col: isinstance(col, int), self.df.columns))
         )
         
-        self.countries = sorted([
-            country for country in self.df['Country Name'].unique() if pd.notna(country)
-        ])
+        self.countries = sorted(
+            list(filter(lambda country: pd.notna(country), self.df['Country Name'].unique()))
+        )
         
         continents_raw = self.df['Continent'].dropna().unique()
         self.continents = sorted(list(map(str, filter(lambda x: pd.notna(x), continents_raw))))
