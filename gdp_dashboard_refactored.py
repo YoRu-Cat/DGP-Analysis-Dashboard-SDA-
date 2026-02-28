@@ -43,20 +43,19 @@ class GDPDashboard:
         self.root.geometry(f"{ui_config['window_width']}x{ui_config['window_height']}")
         self.root.configure(bg=colors['dark'])
         
-        # Apply dark cyberpunk visualization settings
+        # Apply professional dark visualization settings
         viz_config = self.config.get('visualization')
-        plt.style.use('cyberpunk')
+        plt.style.use('dark_background')
         plt.rcParams.update({
-            'figure.figsize': viz_config['figure_size'],
-            'figure.facecolor': viz_config.get('chart_face_color', '#2d1b69'),
-            'axes.facecolor': viz_config.get('chart_bg_color', '#1a0533'),
-            'axes.edgecolor': colors.get('ui_accent_glow', '#f0abfc'),
-            'axes.labelcolor': '#ffffff',
-            'text.color': '#ffffff',
-            'xtick.color': '#ffffff',
-            'ytick.color': '#ffffff',
-            'grid.color': viz_config.get('grid_color', '#5b21b6'),
-            'grid.alpha': viz_config.get('grid_alpha', 0.3),
+            'figure.facecolor': viz_config.get('chart_face_color', '#0d0d0d'),
+            'axes.facecolor': viz_config.get('chart_bg_color', '#000000'),
+            'axes.edgecolor': '#2f3336',
+            'axes.labelcolor': '#e7e9ea',
+            'text.color': '#e7e9ea',
+            'xtick.color': '#71767b',
+            'ytick.color': '#71767b',
+            'grid.color': viz_config.get('grid_color', '#2f3336'),
+            'grid.alpha': viz_config.get('grid_alpha', 0.4),
             'font.family': 'Segoe UI',
             'axes.titlesize': viz_config.get('title_font_size', 16),
             'axes.labelsize': viz_config.get('label_font_size', 12),
@@ -64,9 +63,9 @@ class GDPDashboard:
             'ytick.labelsize': viz_config.get('tick_font_size', 9),
         })
         
-        # Store neon palette for quick access
+        # Store chart palette for quick access
         self.neon_palette = colors.get('chart_palette', 
-            ['#08F7FE', '#FE53BB', '#F5D300', '#00ff41', '#9467ff', '#FF6E27'])
+            ['#1d9bf0', '#00ba7c', '#f4212e', '#ffad1f', '#794bc4', '#ff7a00'])
         
         # Load data
         try:
@@ -93,7 +92,7 @@ class GDPDashboard:
         
         self.create_widgets()
         
-        # Force ALL text to white after widgets exist (overrides vapor theme cyan)
+        # Force all text to X-white after widgets exist
         self._force_white_text(self.root)
         
         # Shuru mein ek default graph dikhao
@@ -109,20 +108,20 @@ class GDPDashboard:
         main_container = tk.Frame(self.root, bg=colors['dark'])
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        # Neon aura left panel
+        # Neon left panel
         left_panel = tk.Frame(main_container, bg=colors['dark_card'],
                              width=ui_config['left_panel_width'],
                              relief=tk.FLAT, borderwidth=0,
-                             highlightbackground=colors['ui_accent_glow'],
-                             highlightthickness=2)
+                             highlightbackground=colors['dark_border'],
+                             highlightthickness=1)
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, padx=(0, 10), pady=5)
         left_panel.pack_propagate(False)
         
-        # Neon aura right panel
+        # Right panel
         right_panel = tk.Frame(main_container, bg=colors['dark_card'],
                               relief=tk.FLAT, borderwidth=0,
-                              highlightbackground=colors['ui_accent_glow'],
-                              highlightthickness=2)
+                              highlightbackground=colors['dark_border'],
+                              highlightthickness=1)
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, pady=5)
         
         self.create_control_panel(left_panel)
@@ -132,31 +131,25 @@ class GDPDashboard:
         colors = self.config.get('colors')
         ui_config = self.config.get('ui')
         
-        # Neon aura outer wrapper around title bar
-        title_glow_wrap = tk.Frame(self.root,
-                                   bg=colors['ui_accent_glow'],
-                                   highlightbackground=colors['ui_accent_glow'],
-                                   highlightthickness=2)
-        title_glow_wrap.pack(fill=tk.X, padx=8, pady=(10, 0))
-
-        title_frame = tk.Frame(title_glow_wrap, bg=colors['dark_surface'],
-                              height=ui_config['title_bar_height'])
-        title_frame.pack(fill=tk.X, padx=2, pady=2)
+        title_frame = tk.Frame(self.root, bg=colors['dark_surface'],
+                              height=ui_config['title_bar_height'],
+                              highlightbackground=colors['dark_border'],
+                              highlightthickness=1)
+        title_frame.pack(fill=tk.X, padx=0, pady=0)
         title_frame.pack_propagate(False)
         
-        # White title with neon glow
         title_label = tk.Label(
             title_frame,
             text=ui_config['title_emoji'],
-            font=('Segoe UI', 26, 'bold'),
+            font=('Segoe UI', 22, 'bold'),
             bg=colors['dark_surface'],
-            fg='#ffffff'
+            fg='#e7e9ea'
         )
         title_label.pack(expand=True)
         
-        # Neon accent line
-        accent_line = tk.Frame(self.root, bg=colors['ui_accent_glow'], height=3)
-        accent_line.pack(fill=tk.X, padx=8)
+        # Subtle X-blue accent line at bottom of title
+        accent_line = tk.Frame(self.root, bg=colors['ui_accent'], height=2)
+        accent_line.pack(fill=tk.X)
     
     def create_control_panel(self, parent):
         colors = self.config.get('colors')
@@ -270,7 +263,7 @@ class GDPDashboard:
                                          selectforeground='#ffffff',
                                          font=('Segoe UI', 8),
                                          relief=tk.FLAT,
-                                         highlightbackground=colors['ui_accent_glow'],
+                                         highlightbackground=colors['dark_border'],
                                          highlightthickness=2)
         compare_scrollbar = ttkb.Scrollbar(compare_frame, orient=tk.VERTICAL, 
                                          command=self.compare_listbox.yview,
@@ -359,7 +352,7 @@ class GDPDashboard:
                                   bg=colors['dark_surface'], fg='#ffffff',
                                   buttonbackground=colors['dark_border'],
                                   relief=tk.FLAT,
-                                  highlightbackground=colors['ui_accent_glow'],
+                                  highlightbackground=colors['dark_border'],
                                   highlightthickness=2,
                                   font=('Segoe UI', 9))
         top_n_spinner.pack(side=tk.LEFT)
@@ -379,71 +372,73 @@ class GDPDashboard:
         button_frame = tk.Frame(parent, bg=colors['dark_card'])
         button_frame.pack(pady=10, padx=20, fill=tk.X)
         
-        # Purple analyze button
+        # White analyze button with black text
         analyze_btn = tk.Button(
             button_frame,
             text="🔍 Analyze",
             command=self.perform_analysis,
-            bg=colors['dark_highlight'],
-            fg='#ffffff',
+            bg='#ffffff',
+            fg='#000000',
             font=('Segoe UI', 10, 'bold'),
             relief=tk.FLAT,
             borderwidth=0,
             cursor='hand2',
             height=2,
-            activebackground=colors['ui_accent'],
-            activeforeground='#ffffff',
-            highlightbackground=colors['ui_accent_glow'],
-            highlightthickness=2
+            activebackground='#e0e0e0',
+            activeforeground='#000000',
+            highlightbackground='#ffffff',
+            highlightthickness=0
         )
         analyze_btn.pack(fill=tk.X, pady=5)
         
-        # Neon green export button
+        # White export button with black text
         export_btn = tk.Button(
             button_frame,
             text="💾 Export Results to TXT",
             command=self.export_analysis,
-            bg=colors['dark_surface'],
-            fg='#ffffff',
+            bg='#ffffff',
+            fg='#000000',
             font=('Segoe UI', 9, 'bold'),
             relief=tk.FLAT,
             borderwidth=0,
             cursor='hand2',
             height=2,
-            activebackground=colors['neon_green'],
-            activeforeground=colors['dark'],
-            highlightbackground=colors['neon_green'],
-            highlightthickness=1
+            activebackground='#e0e0e0',
+            activeforeground='#000000',
+            highlightbackground='#ffffff',
+            highlightthickness=0
         )
         export_btn.pack(fill=tk.X, pady=5)
         
-        # Neon pink clear button
+        # White clear button with black text
         clear_btn = tk.Button(
             button_frame,
             text="🗑️ Clear Visualization",
             command=self.clear_visualization,
-            bg=colors['dark_surface'],
-            fg='#ffffff',
+            bg='#ffffff',
+            fg='#000000',
             font=('Segoe UI', 9, 'bold'),
             relief=tk.FLAT,
             borderwidth=0,
             cursor='hand2',
             height=2,
-            activebackground=colors['neon_pink'],
-            activeforeground=colors['dark'],
-            highlightbackground=colors['neon_pink'],
-            highlightthickness=1
+            activebackground='#e0e0e0',
+            activeforeground='#000000',
+            highlightbackground='#ffffff',
+            highlightthickness=0
         )
         clear_btn.pack(fill=tk.X, pady=5)
     
     def _force_white_text(self, widget):
-        """Recursively force fg='#ffffff' on all tk.Label, tk.Radiobutton, tk.Checkbutton widgets."""
+        """Recursively force fg on all tk.Label, tk.Radiobutton, tk.Checkbutton widgets and white bg on Buttons."""
         try:
             widget_class = widget.winfo_class()
             if widget_class in ('Label', 'Radiobutton', 'Checkbutton'):
-                widget.configure(fg='#ffffff')
-            elif widget_class == 'Radiobutton':
-                widget.configure(activeforeground='#ffffff')
+                widget.configure(fg='#e7e9ea')
+            elif widget_class == 'Button':
+                widget.configure(bg='#ffffff', fg='#000000',
+                                 activebackground='#e0e0e0', activeforeground='#000000',
+                                 highlightbackground='#ffffff')
         except Exception:
             pass
         list(map(self._force_white_text, widget.winfo_children()))
@@ -463,7 +458,7 @@ class GDPDashboard:
     def create_visualization_panel(self, parent):
         colors = self.config.get('colors')
         
-        # Purple-glowing notebook with ttkbootstrap vapor theme
+        # Clean dark notebook with ttkbootstrap darkly theme
         style = ttkb.Style()
         style.configure('primary.TNotebook', background=colors['dark_card'])
         style.configure('primary.TNotebook.Tab',
@@ -472,17 +467,17 @@ class GDPDashboard:
                        padding=[16, 8],
                        font=('Segoe UI', 10, 'bold'))
         style.map('primary.TNotebook.Tab',
-                 background=[('selected', colors['section_bg'])],
-                 foreground=[('selected', colors['ui_accent_glow'])])
+                 background=[('selected', colors['dark_card'])],
+                 foreground=[('selected', '#e7e9ea')])
         
         self.notebook = ttkb.Notebook(parent, bootstyle="primary")
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Graph tab - deep purple bg
+        # Graph tab - pure black bg
         self.viz_frame = tk.Frame(self.notebook, bg=colors['dark'])
         self.notebook.add(self.viz_frame, text="  📊 Visualization  ")
         
-        # Statistics tab - deep purple bg
+        # Statistics tab - pure black bg
         self.stats_frame = tk.Frame(self.notebook, bg=colors['dark'])
         self.notebook.add(self.stats_frame, text="  📋 Statistics  ")
         
@@ -492,11 +487,11 @@ class GDPDashboard:
             wrap=tk.WORD,
             font=('Cascadia Code', 10),
             bg=colors['dark_card'],
-            fg='#ffffff',
-            insertbackground='#ffffff',
+            fg='#e7e9ea',
+            insertbackground='#e7e9ea',
             relief=tk.FLAT,
             borderwidth=0,
-            highlightbackground=colors['ui_accent_glow'],
+            highlightbackground=colors['dark_border'],
             highlightthickness=2,
             selectbackground=colors['ui_accent'],
             selectforeground='#ffffff'
@@ -539,44 +534,42 @@ class GDPDashboard:
         self._update_timer = self.root.after(ui_config['update_delay_ms'], self.perform_analysis)
     
     def _style_figure(self, fig, nrows=1, ncols=1):
-        """Apply neon-glow border around the figure"""
+        """Apply clean dark background to figure"""
         colors = self.config.get('colors')
         viz_config = self.config.get('visualization')
-        fig.patch.set_facecolor(viz_config.get('chart_face_color', '#2d1b69'))
+        fig.patch.set_facecolor(viz_config.get('chart_face_color', '#0d0d0d'))
         fig.patch.set_alpha(1.0)
-        # Neon glow border around entire figure
-        fig.patch.set_linewidth(3)
-        fig.patch.set_edgecolor(colors.get('ui_accent_glow', '#f0abfc'))
         return fig
     
     def _style_ax(self, ax, title='', xlabel='', ylabel='', grid=True):
-        """Apply consistent dark purple styling with neon spine glow"""
+        """Apply clean X/Twitter dark theme styling to axes"""
         colors = self.config.get('colors')
         viz_config = self.config.get('visualization')
-        ax.set_facecolor(viz_config.get('chart_bg_color', '#1a0533'))
-        # All 4 spines visible with neon glow
-        neon_color = colors.get('ui_accent_glow', '#f0abfc')
-        for spine in ax.spines.values():
-            spine.set_visible(True)
-            spine.set_color(neon_color)
-            spine.set_linewidth(1.8)
+        ax.set_facecolor(viz_config.get('chart_bg_color', '#000000'))
+        # Subtle border, top/right off
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('#2f3336')
+        ax.spines['left'].set_linewidth(1)
+        ax.spines['bottom'].set_color('#2f3336')
+        ax.spines['bottom'].set_linewidth(1)
         if title:
             ax.set_title(title, fontsize=viz_config.get('title_font_size', 16),
-                        fontweight='bold', color='#ffffff', pad=16,
+                        fontweight='bold', color='#e7e9ea', pad=16,
                         fontfamily='Segoe UI')
         if xlabel:
             ax.set_xlabel(xlabel, fontsize=viz_config.get('label_font_size', 12),
-                         fontweight='bold', color='#ffffff',
+                         fontweight='bold', color='#71767b',
                          labelpad=8)
         if ylabel:
             ax.set_ylabel(ylabel, fontsize=viz_config.get('label_font_size', 12),
-                         fontweight='bold', color='#ffffff',
+                         fontweight='bold', color='#71767b',
                          labelpad=8)
         if grid:
-            ax.grid(True, alpha=viz_config.get('grid_alpha', 0.3),
-                   color=viz_config.get('grid_color', '#5b21b6'),
-                   linestyle='--', linewidth=0.5)
-        ax.tick_params(colors='#ffffff', length=4, width=0.6)
+            ax.grid(True, alpha=0.4,
+                   color='#2f3336',
+                   linestyle='-', linewidth=0.5)
+        ax.tick_params(colors='#71767b', length=4, width=0.6)
         return ax
 
     def _format_gdp(self, value):
@@ -660,7 +653,7 @@ class GDPDashboard:
         if len(years) > viz_config['max_years_rotation']:
             ax.tick_params(axis='x', rotation=45)
         
-        mplcyberpunk.add_glow_effects(ax)
+
         fig.tight_layout()
         self.display_plot(fig)
         
@@ -730,7 +723,7 @@ class GDPDashboard:
         if len(years) > viz_config['max_years_rotation']:
             ax.tick_params(axis='x', rotation=45)
         
-        mplcyberpunk.add_glow_effects(ax)
+
         fig.tight_layout()
         self.display_plot(fig)
         
@@ -767,7 +760,7 @@ class GDPDashboard:
         ax1.yaxis.set_major_formatter(FuncFormatter(
             lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
         ))
-        mplcyberpunk.add_glow_effects(ax1)
+
         
         # Plot 2: Top countries - horizontal neon bars
         ax2 = fig.add_subplot(222)
@@ -1175,7 +1168,7 @@ class GDPDashboard:
                 ax.yaxis.set_major_formatter(FuncFormatter(
                     lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
                 ))
-                mplcyberpunk.add_glow_effects(ax)
+
             elif chart_type == 'scatter':
                 self._style_ax(ax, title=f'{country} - GDP Scatter Analysis', xlabel='Year', ylabel='GDP (USD)')
                 scatter_colors = list(map(lambda i: self.neon_palette[i % len(self.neon_palette)], range(len(years_int))))
@@ -1275,7 +1268,7 @@ class GDPDashboard:
             ax3.yaxis.set_major_formatter(FuncFormatter(
                 lambda y, _: (f'${y/1e12:.1f}T' if y >= 1e12 else f'${y/1e9:.0f}B' if y >= 1e9 else f'${y/1e6:.0f}M')
             ))
-            mplcyberpunk.add_glow_effects(ax3)
+
         
         # Subplot 4: Scatter with neon colors
         ax4 = fig.add_subplot(224)
@@ -1678,7 +1671,40 @@ class GDPDashboard:
 
 def main():
     root = tk.Tk()
-    style = ttkb.Style('vapor')
+    style = ttkb.Style('darkly')
+    
+    # Force pure black on ALL ttkbootstrap theme colors
+    style.colors.bg = '#000000'
+    style.colors.dark = '#000000'
+    style.colors.border = '#010101'
+    style.colors.inputbg = '#000000'
+    style.colors.inputfg = '#e7e9ea'
+    style.configure('.', background='#000000', fieldbackground='#000000',
+                    foreground='#e7e9ea', bordercolor='#2f3336',
+                    darkcolor='#000000', lightcolor='#111111')
+    style.configure('TFrame', background='#000000')
+    style.configure('TLabel', background='#000000', foreground='#e7e9ea')
+    style.configure('TNotebook', background='#000000')
+    style.configure('TNotebook.Tab', background='#000000', foreground='#71767b')
+    style.map('TNotebook.Tab',
+              background=[('selected', '#000000')],
+              foreground=[('selected', '#e7e9ea')])
+    style.configure('TCombobox', fieldbackground='#000000', background='#000000',
+                    foreground='#e7e9ea', selectbackground='#1d9bf0')
+    style.configure('primary.TNotebook', background='#000000')
+    style.configure('primary.TNotebook.Tab', background='#000000',
+                    foreground='#71767b')
+    style.map('primary.TNotebook.Tab',
+              background=[('selected', '#111111')],
+              foreground=[('selected', '#e7e9ea')])
+    
+    # Force tk.Button colors via option database (overrides ttkbootstrap defaults)
+    root.option_add('*Button.background', '#ffffff')
+    root.option_add('*Button.foreground', '#000000')
+    root.option_add('*Button.activeBackground', '#e0e0e0')
+    root.option_add('*Button.activeForeground', '#000000')
+    root.option_add('*Button.highlightBackground', '#ffffff')
+    
     app = GDPDashboard(root)
     root.mainloop()
 
