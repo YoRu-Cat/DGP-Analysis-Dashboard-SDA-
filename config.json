@@ -1,4 +1,50 @@
 {
+  "pipeline": {
+    "input_driver": "excel",
+    "output_driver": "console",
+    "data_source": "data/gdp_with_continent_filled.xlsx",
+    "analyses": [
+      "top_countries",
+      "bottom_countries",
+      "growth_rate",
+      "avg_gdp_by_continent",
+      "global_gdp_trend",
+      "fastest_growing_continent",
+      "consistent_decline",
+      "continent_contribution"
+    ],
+    "default_params": {
+      "continent": "Asia",
+      "year": 2020,
+      "date_range": [2000, 2020],
+      "top_n": 10,
+      "decline_years": 5
+    }
+  },
+  "input_drivers": {
+    "csv": {
+      "class": "CsvReader",
+      "module": "plugins.inputs"
+    },
+    "json": {
+      "class": "JsonReader",
+      "module": "plugins.inputs"
+    },
+    "excel": {
+      "class": "ExcelReader",
+      "module": "plugins.inputs"
+    }
+  },
+  "output_drivers": {
+    "console": {
+      "class": "ConsoleWriter",
+      "module": "plugins.outputs"
+    },
+    "chart": {
+      "class": "GraphicsChartWriter",
+      "module": "plugins.outputs"
+    }
+  },
   "phase1_filters": {
     "region": "Asia",
     "year": "2020",
