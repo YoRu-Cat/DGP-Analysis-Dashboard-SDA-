@@ -183,9 +183,10 @@ end note
 
 note bottom of MainPkg
   CLI entry point:
-  - python main.py               (all analyses)
-  - python main.py top_countries  (single analysis)
-  - python main.py --list         (list analyses)
+  - python main.py               (GUI dashboard, default)
+  - python main.py --cli         (all analyses, console)
+  - python main.py top_countries (single analysis)
+  - python main.py --list        (list analyses)
 end note
 
 @enduml
