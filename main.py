@@ -80,13 +80,17 @@ def run_single(analysis_name: str, config_path: str = 'config.json') -> None:
     sink = _create_output(output_drivers, output_driver_name, cfg)
     reader = _create_input(input_drivers, input_driver_name, data_source)
 
-    from core.engine import TransformationEngine
-    engine = TransformationEngine(sink, cfg)
+    # Override analyses to empty so execute() loads data but runs nothing
+    cfg_single = {
+        **cfg,
+        'pipeline': {**pipeline, 'analyses': []},
+    }
 
-    from plugins.inputs import _df_to_records
-    import pandas as pd
-    df = pd.read_excel(data_source) if data_source.endswith('.xlsx') else pd.read_csv(data_source)
-    engine.load_data(_df_to_records(df))
+    from core.engine import TransformationEngine
+    engine = TransformationEngine(sink, cfg_single)
+
+    # Use the input plugin to load data (execute loads + runs 0 analyses)
+    reader.read_and_push(engine)
 
     params = pipeline.get('default_params', {})
     results = engine.run_analysis(analysis_name, params)
