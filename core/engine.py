@@ -109,10 +109,10 @@ class TransformationEngine:
         return list(map(
             lambda row: {
                 'rank': row[0],
-                'country': row[1]['Country Name'],
+                'country': row[1][1]['Country Name'],
                 'continent': continent,
                 'year': year,
-                'gdp': row[1][year],
+                'gdp': row[1][1][year],
             },
             enumerate(top.iterrows(), 1),
         ))
@@ -131,10 +131,10 @@ class TransformationEngine:
         return list(map(
             lambda row: {
                 'rank': row[0],
-                'country': row[1]['Country Name'],
+                'country': row[1][1]['Country Name'],
                 'continent': continent,
                 'year': year,
-                'gdp': row[1][year],
+                'gdp': row[1][1][year],
             },
             enumerate(bottom.iterrows(), 1),
         ))

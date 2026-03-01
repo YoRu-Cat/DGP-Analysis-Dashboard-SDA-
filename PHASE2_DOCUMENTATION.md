@@ -266,7 +266,55 @@ Input (plugins.inputs)           Core (core)              Output (plugins.output
 
 ---
 
-## 5 FP Compliance
+## 5 `plugins/inputs.py` — Input Plugins (The Source)
+
+Three reader implementations that satisfy the **inbound** data flow.
+Each reader loads a file, converts it to `List[Dict[str, Any]]`, and
+pushes via `PipelineService.execute()` — zero knowledge of Core internals.
+
+### Classes
+
+| Class         | File Format | Library Used        |
+| ------------- | ----------- | ------------------- |
+| `CsvReader`   | `.csv`      | `pandas.read_csv`   |
+| `JsonReader`  | `.json`     | `json.load`         |
+| `ExcelReader` | `.xlsx`     | `pandas.read_excel` |
+
+### Common Interface
+
+```python
+reader = CsvReader(file_path="data/gdp_with_continent_filled.csv")
+reader.read_and_push(service=engine)   # engine satisfies PipelineService
+```
+
+| Method          | Signature                            | Description                              |
+| --------------- | ------------------------------------ | ---------------------------------------- |
+| `read_and_push` | `(service: PipelineService) -> None` | Read file, convert to records, push data |
+
+### Data Flow
+
+1. Reader opens file at `self.file_path`
+2. Converts to `List[Dict[str, Any]]` with integer year keys
+3. Calls `service.execute(records)` — the reader never knows what happens next
+
+### Helper Functions (module-level)
+
+| Function            | Purpose                                                   |
+| ------------------- | --------------------------------------------------------- |
+| `_coerce_year_keys` | Convert string-digit keys to `int` in a single dict       |
+| `_df_to_records`    | Convert a DataFrame to `List[Dict]` with int year columns |
+
+### Data Files
+
+| File                                  | Format | Generated From      |
+| ------------------------------------- | ------ | ------------------- |
+| `data/gdp_with_continent_filled.xlsx` | Excel  | Original source     |
+| `data/gdp_with_continent_filled.csv`  | CSV    | Exported from Excel |
+| `data/gdp_with_continent_filled.json` | JSON   | Exported from Excel |
+
+---
+
+## 6 FP Compliance
 
 All modules maintain the Phase 1 functional programming constraint:
 
