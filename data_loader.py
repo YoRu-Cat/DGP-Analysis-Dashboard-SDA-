@@ -1,11 +1,11 @@
-"""
-Data Loader Module
-Handles loading GDP data from Excel files with validation.
-"""
+
+#Data Loader Module
+#Handles loading GDP data from Excel files with validation.
 
 import pandas as pd
 import json
 import os
+from functools import reduce
 
 
 class ConfigLoader:
@@ -36,16 +36,16 @@ class ConfigLoader:
         """Validate configuration structure"""
         required_sections = ['data', 'ui', 'colors', 'analysis_types', 'visualization']
         
-        for section in required_sections:
-            if section not in config:
-                raise ValueError(f"Missing required configuration section: {section}")
+        missing_sections = list(filter(lambda section: section not in config, required_sections))
         
-        # Validate data section
-        if 'file_path' not in config['data']:
-            raise ValueError("Missing 'file_path' in data configuration")
+        if missing_sections:
+            raise ValueError(f"Missing required configuration section: {', '.join(missing_sections)}")
         
-        if 'required_columns' not in config['data']:
-            raise ValueError("Missing 'required_columns' in data configuration")
+        data_required = ['file_path', 'required_columns']
+        missing_data_fields = list(filter(lambda key: key not in config['data'], data_required))
+        
+        if missing_data_fields:
+            raise ValueError(f"Missing in data configuration: {', '.join(missing_data_fields)}")
     
     def get(self, section, key=None):
         """Get configuration value"""
@@ -65,19 +65,34 @@ class GDPDataLoader:
         self.continents = []
     
     def load_data(self):
-        """Load GDP data from Excel file"""
+        """Load GDP data from CSV or Excel file (smart format detection)"""
         file_path = self.config.get('data', 'file_path')
         
         if not os.path.exists(file_path):
             raise FileNotFoundError(
                 f"Data file not found: {file_path}\n"
-                f"Please ensure the Excel file exists in the project directory."
+                f"Please ensure the data file (CSV or Excel) exists in the project directory."
             )
         
+        # Smart format detection based on file extension
+        file_extension = os.path.splitext(file_path)[1].lower()
+        
         try:
-            self.df = pd.read_excel(file_path)
+            if file_extension == '.csv':
+                # Load CSV file
+                self.df = pd.read_csv(file_path)
+                print(f"Loaded CSV file: {file_path}")
+            elif file_extension in ['.xlsx', '.xls']:
+                # Load Excel file
+                self.df = pd.read_excel(file_path)
+                print(f"Loaded Excel file: {file_path}")
+            else:
+                raise ValueError(
+                    f"Unsupported file format: {file_extension}\n"
+                    f"Supported formats: .csv, .xlsx, .xls"
+                )
         except Exception as e:
-            raise Exception(f"Failed to read Excel file: {str(e)}")
+            raise Exception(f"Failed to read data file ({file_extension}): {str(e)}")
         
         self._validate_data()
         self._extract_metadata()
@@ -90,28 +105,31 @@ class GDPDataLoader:
             raise ValueError("Loaded data is empty")
         
         required_columns = self.config.get('data', 'required_columns')
-        missing_columns = [col for col in required_columns if col not in self.df.columns]
+        missing_columns = list(filter(lambda col: col not in self.df.columns, required_columns))
         
         if missing_columns:
             raise ValueError(
                 f"Missing required columns in data: {', '.join(missing_columns)}\n"
-                f"Available columns: {', '.join(self.df.columns)}"
+                f"Available columns: {', '.join(map(str, self.df.columns))}"
             )
         
         # Check for year columns (numeric columns)
-        year_cols = [col for col in self.df.columns if isinstance(col, int)]
+        year_cols = list(filter(lambda col: isinstance(col, int), self.df.columns))
         if not year_cols:
             raise ValueError("No year columns found in data (expected numeric column names)")
     
     def _extract_metadata(self):
         """Extract years, countries, and continents from data"""
-        # Year columns nikalo
-        self.year_columns = [col for col in self.df.columns if isinstance(col, int)]
-        self.year_columns.sort()
+        self.year_columns = sorted(
+            list(filter(lambda col: isinstance(col, int), self.df.columns))
+        )
         
-        # Countries aur continents ki list banao
-        self.countries = sorted(self.df['Country Name'].unique())
-        self.continents = sorted(self.df['Continent'].dropna().unique())
+        self.countries = sorted(
+            list(filter(lambda country: pd.notna(country), self.df['Country Name'].unique()))
+        )
+        
+        continents_raw = self.df['Continent'].dropna().unique()
+        self.continents = sorted(list(map(str, filter(lambda x: pd.notna(x), continents_raw))))
         
         if not self.countries:
             raise ValueError("No countries found in data")

@@ -3,21 +3,36 @@
 
 import pandas as pd
 import numpy as np
+import json
+import os
 import sys
+from functools import reduce
 
 
 def test_data_loading():
     # Pehle dekhte hain data load ho raha hai ya nahi
     print("Test 1: Data Loading...", end=" ")
     try:
-        df = pd.read_excel('gdp_with_continent_filled.xlsx')
+        # Load config for file path
+        config_path = 'config.json'
+        config = json.load(open(config_path, 'r', encoding='utf-8')) if os.path.exists(config_path) else None
+        file_path = config['data']['file_path'] if config else 'gdp_with_continent_filled.xlsx'
+        
+        file_extension = os.path.splitext(file_path)[1].lower()
+        loader_map = {
+            '.csv': lambda fp: pd.read_csv(fp),
+            '.xlsx': lambda fp: pd.read_excel(fp),
+            '.xls': lambda fp: pd.read_excel(fp)
+        }
+        df = loader_map.get(file_extension, lambda fp: pd.read_excel(fp))(file_path)
+        
         assert len(df) > 0, "DataFrame is empty"
         assert 'Country Name' in df.columns, "Missing Country Name column"
         assert 'Continent' in df.columns, "Missing Continent column"
-        print("✓ PASSED")
+        print("\u2713 PASSED")
         return True, df
     except Exception as e:
-        print(f"✗ FAILED: {e}")
+        print(f"\u2717 FAILED: {e}")
         return False, None
 
 
@@ -25,14 +40,14 @@ def test_data_structure(df):
     # Data ki structure check karo
     print("Test 2: Data Structure...", end=" ")
     try:
-        year_columns = [col for col in df.columns if isinstance(col, int)]
+        year_columns = list(filter(lambda col: isinstance(col, int), df.columns))
         assert len(year_columns) > 0, "No year columns found"
         assert min(year_columns) >= 1960, "Years start before 1960"
         assert max(year_columns) <= 2030, "Years extend beyond 2030"
-        print("✓ PASSED")
+        print("\u2713 PASSED")
         return True
     except Exception as e:
-        print(f"✗ FAILED: {e}")
+        print(f"\u2717 FAILED: {e}")
         return False
 
 
@@ -40,10 +55,10 @@ def test_data_integrity(df):
     # Data sahi hai ya nahi check karo
     print("Test 3: Data Integrity...", end=" ")
     try:
-        # Zaroori columns check karo
+        # Zaroori columns check karo - functional check using all + map
         required_cols = ['Country Name', 'Country Code', 'Continent']
-        for col in required_cols:
-            assert col in df.columns, f"Missing column: {col}"
+        missing_cols = list(filter(lambda col: col not in df.columns, required_cols))
+        assert not missing_cols, f"Missing columns: {', '.join(missing_cols)}"
         
         # Country names check karo
         assert df['Country Name'].notna().all(), "Some countries have null names"
@@ -52,10 +67,10 @@ def test_data_integrity(df):
         continents = df['Continent'].dropna().unique()
         assert len(continents) > 0, "No continents found"
         
-        print("✓ PASSED")
+        print("\u2713 PASSED")
         return True
     except Exception as e:
-        print(f"✗ FAILED: {e}")
+        print(f"\u2717 FAILED: {e}")
         return False
 
 
@@ -63,7 +78,7 @@ def test_numerical_data(df):
     # GDP numbers sahi hain ya nahi
     print("Test 4: Numerical Data...", end=" ")
     try:
-        year_columns = [col for col in df.columns if isinstance(col, int)]
+        year_columns = list(filter(lambda col: isinstance(col, int), df.columns))
         
         # Koi GDP data hai ya nahi
         total_data_points = df[year_columns].notna().sum().sum()
@@ -72,12 +87,12 @@ def test_numerical_data(df):
         # Negative values check karo
         has_negative = (df[year_columns] < 0).any().any()
         if has_negative:
-            print("⚠ WARNING: Negative GDP values detected", end=" ")
+            print("\u26A0 WARNING: Negative GDP values detected", end=" ")
         
-        print("✓ PASSED")
+        print("\u2713 PASSED")
         return True
     except Exception as e:
-        print(f"✗ FAILED: {e}")
+        print(f"\u2717 FAILED: {e}")
         return False
 
 
@@ -90,10 +105,10 @@ def test_imports():
         import matplotlib
         import seaborn
         import tkinter
-        print("✓ PASSED")
+        print("\u2713 PASSED")
         return True
     except ImportError as e:
-        print(f"✗ FAILED: {e}")
+        print(f"\u2717 FAILED: {e}")
         return False
 
 
@@ -101,7 +116,7 @@ def test_basic_analysis(df):
     # Basic analysis functions test karo
     print("Test 6: Basic Analysis...", end=" ")
     try:
-        year_columns = [col for col in df.columns if isinstance(col, int)]
+        year_columns = list(filter(lambda col: isinstance(col, int), df.columns))
         latest_year = max(year_columns)
         
         # Top countries nikalne ki koshish karo
@@ -118,10 +133,10 @@ def test_basic_analysis(df):
         subset_data = df[year_subset]
         assert subset_data.shape[1] == 10, "Failed to subset years"
         
-        print("✓ PASSED")
+        print("\u2713 PASSED")
         return True
     except Exception as e:
-        print(f"✗ FAILED: {e}")
+        print(f"\u2717 FAILED: {e}")
         return False
 
 
@@ -129,7 +144,7 @@ def test_statistics(df):
     # Statistical calculations test karo
     print("Test 7: Statistical Calculations...", end=" ")
     try:
-        year_columns = [col for col in df.columns if isinstance(col, int)]
+        year_columns = list(filter(lambda col: isinstance(col, int), df.columns))
         latest_year = max(year_columns)
         
         # Basic statistics nikalo
@@ -152,10 +167,10 @@ def test_statistics(df):
             growth = ((gdp_last - gdp_first) / gdp_first) * 100
             assert not np.isnan(growth), "Growth calculation failed"
         
-        print("✓ PASSED")
+        print("\u2713 PASSED")
         return True
     except Exception as e:
-        print(f"✗ FAILED: {e}")
+        print(f"\u2717 FAILED: {e}")
         return False
 
 
@@ -163,7 +178,7 @@ def test_data_coverage(df):
     # Kitna data available hai check karo
     print("Test 8: Data Coverage...", end=" ")
     try:
-        year_columns = [col for col in df.columns if isinstance(col, int)]
+        year_columns = list(filter(lambda col: isinstance(col, int), df.columns))
         
         # Data coverage calculate karo
         total_cells = len(df) * len(year_columns)
@@ -183,44 +198,31 @@ def main():
     print("  GDP DASHBOARD TEST SUITE")
     print("="*60 + "\n")
     
-    tests_passed = 0
-    total_tests = 8
-    
     # Test 1: Data load ho raha hai?
     success, df = test_data_loading()
-    if success:
-        tests_passed += 1
-    else:
+    if not success:
         print("\nCritical error: Cannot load data. Stopping tests.")
-        return
+        return False
     
-    # Baaki tests chalaao
-    if test_data_structure(df):
-        tests_passed += 1
+    # Run all remaining tests using reduce to count passes
+    test_functions = [
+        lambda: test_data_structure(df),
+        lambda: test_data_integrity(df),
+        lambda: test_numerical_data(df),
+        lambda: test_imports(),
+        lambda: test_basic_analysis(df),
+        lambda: test_statistics(df),
+        lambda: test_data_coverage(df)
+    ]
     
-    # Test 3: Data Integrity
-    if test_data_integrity(df):
-        tests_passed += 1
+    remaining_passed = reduce(
+        lambda count, test_fn: count + (1 if test_fn() else 0),
+        test_functions,
+        0
+    )
     
-    # Test 4: Numerical Data
-    if test_numerical_data(df):
-        tests_passed += 1
-    
-    # Test 5: Imports
-    if test_imports():
-        tests_passed += 1
-    
-    # Test 6: Basic Analysis
-    if test_basic_analysis(df):
-        tests_passed += 1
-    
-    # Test 7: Statistics
-    if test_statistics(df):
-        tests_passed += 1
-    
-    # Test 8: Data Coverage
-    if test_data_coverage(df):
-        tests_passed += 1
+    tests_passed = 1 + remaining_passed  # +1 for data loading test
+    total_tests = 8
     
     # Results summary
     print("\n" + "="*60)
@@ -228,10 +230,10 @@ def main():
     print("="*60)
     
     if tests_passed == total_tests:
-        print("\n✓ All tests passed! The dashboard is ready to use.")
-        print("  Run 'python gdp_dashboard.py' to launch the application.")
+        print("\n\u2713 All tests passed! The dashboard is ready to use.")
+        print("  Run 'python gdp_dashboard_refactored.py' to launch the application.")
     else:
-        print(f"\n⚠ {total_tests - tests_passed} test(s) failed.")
+        print(f"\n\u26A0 {total_tests - tests_passed} test(s) failed.")
         print("  Please check the errors above and fix them before running the dashboard.")
     
     print("\n" + "="*60 + "\n")

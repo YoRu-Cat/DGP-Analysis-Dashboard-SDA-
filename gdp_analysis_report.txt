@@ -1,19 +1,16 @@
 ================================================================================
-CORRELATION ANALYSIS
+COUNTRY COMPARISON STATISTICS
 ================================================================================
 
-HIGHEST CORRELATIONS:
+Period: 1999 - 2024
+Countries: 4
+
+Country                        GDP in 2024               Avg GDP                  
 --------------------------------------------------------------------------------
- 1. Austria                   <-> Latvia                    :  0.983
- 2. Australia                 <-> Cabo Verde                :  0.979
- 3. Australia                 <-> Korea, Rep.               :  0.977
- 4. Austria                   <-> Cabo Verde                :  0.976
- 5. Australia                 <-> Late-demographic dividend :  0.975
- 6. Austria                   <-> Korea, Rep.               :  0.973
- 7. Cabo Verde                <-> Latvia                    :  0.973
- 8. Australia                 <-> Azerbaijan                :  0.968
- 9. Cabo Verde                <-> Korea, Rep.               :  0.964
-10. Australia                 <-> Austria                   :  0.960
+Afghanistan                    $nan                      $13,262,077,006          
+Albania                        $27,046,429,297           $12,179,973,616          
+Ukraine                        $190,741,262,415          $123,642,184,790         
+Uruguay                        $80,961,511,074           $44,335,115,931          
 
 ================================================================================
 
