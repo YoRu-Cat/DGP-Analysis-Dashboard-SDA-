@@ -2,6 +2,8 @@
 
 A comprehensive interactive dashboard for analyzing and visualizing GDP data across 266 countries and continents from 1960 to 2024. Built with two execution phases: a rich tkinter GUI (Phase 1) and a modular DIP engine with runtime-selectable analyses (Phase 2).
 
+> **Full documentation**: See [DOCUMENTATION.md](DOCUMENTATION.md) for complete project documentation covering architecture, all analyses, DIP compliance evaluation, config reference, and troubleshooting.
+
 ---
 
 ## Quick Start
