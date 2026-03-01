@@ -13,6 +13,18 @@ python gdp_dashboard_refactored.py
 
 Or double-click `launch_dashboard.bat` on Windows.
 
+### Via main.py (single entry point)
+
+```bash
+python main.py                        # Launch GUI dashboard (default)
+python main.py --gui                  # Launch GUI dashboard (explicit)
+python main.py --cli                  # Run all 8 analyses in console
+python main.py top_countries           # Run a single analysis (console)
+python main.py --list                  # List available analyses
+```
+
+Change `pipeline.output_driver` in `config.json` to `"chart"` to save PNG files instead of printing to console.
+
 ### Prerequisites
 
 - Python 3.10+
@@ -31,6 +43,8 @@ python test_dashboard.py
 ```
 proj/
 ├── gdp_dashboard_refactored.py   # Main GUI dashboard application
+├── main.py                        # CLI orchestrator (full pipeline / single analysis)
+├── architecture.puml              # PlantUML architecture diagram
 ├── data_loader.py                 # ConfigLoader, GDPDataLoader
 ├── data_processor.py              # GDPDataProcessor (statistics, filtering)
 ├── test_dashboard.py              # Automated test suite (8 tests)
@@ -47,8 +61,7 @@ proj/
 │   ├── inputs.py                  # CsvReader, JsonReader, ExcelReader
 │   └── outputs.py                 # ConsoleWriter, GraphicsChartWriter, TkinterSink
 └── data/
-    ├── __init__.py
-    └── gdp_with_continent_filled.xlsx
+    └── __init__.py
 ```
 
 ---
