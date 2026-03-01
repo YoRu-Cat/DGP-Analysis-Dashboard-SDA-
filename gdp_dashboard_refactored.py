@@ -19,6 +19,8 @@ import mplcyberpunk
 
 from data_loader import ConfigLoader, GDPDataLoader
 from data_processor import GDPDataProcessor
+from core.engine import TransformationEngine
+from plugins.outputs import TkinterSink
 
 warnings.filterwarnings('ignore')
 
@@ -81,6 +83,16 @@ class GDPDashboard:
             # Initialize data processor
             self.processor = GDPDataProcessor(self.df, self.year_columns)
             
+            # Initialize Phase 2 engine
+            raw_config = self.config.config if hasattr(self.config, 'config') else {}
+            self.tkinter_sink = TkinterSink(raw_config)
+            self.engine = TransformationEngine(self.tkinter_sink, raw_config)
+            
+            # Load data into engine without running all analyses
+            from plugins.inputs import _df_to_records
+            engine_records = _df_to_records(self.df)
+            self.engine.load_data(engine_records)
+            
             # Print data summary
             summary = data_loader.get_summary()
             print(f"Data loaded: {summary['total_countries']} countries, {summary['total_years']} years")
@@ -91,6 +103,9 @@ class GDPDashboard:
             return
         
         self.create_widgets()
+        
+        # Bind Phase 2 TkinterSink to viz widgets
+        self.tkinter_sink.bind(self.viz_frame, self.stats_text, self.notebook)
         
         # Force all text to X-white after widgets exist
         self._force_white_text(self.root)
@@ -206,6 +221,16 @@ class GDPDashboard:
         self.analysis_type = tk.StringVar(value=analyses[0]['value'])
         
         def create_radio(analysis):
+            if analysis.get('disabled', False):
+                sep = tk.Label(
+                    parent,
+                    text=analysis['name'],
+                    bg=colors['dark_card'],
+                    fg=colors.get('ui_accent', '#1d9bf0'),
+                    font=('Segoe UI', 9, 'bold'),
+                )
+                sep.pack(anchor=tk.W, padx=15, pady=(8, 2))
+                return sep
             rb = tk.Radiobutton(
                 parent,
                 text=analysis['name'],
@@ -607,7 +632,16 @@ class GDPDashboard:
             "correlation": self.plot_correlation,
             "phase1_regional": self.plot_phase1_regional_analysis,
             "phase1_year": self.plot_phase1_year_analysis,
-            "phase1_complete": self.plot_phase1_complete_analysis
+            "phase1_complete": self.plot_phase1_complete_analysis,
+            "p2_top_countries": lambda: self._run_engine_analysis('top_countries'),
+            "p2_bottom_countries": lambda: self._run_engine_analysis('bottom_countries'),
+            "p2_growth_rate": lambda: self._run_engine_analysis('growth_rate'),
+            "p2_avg_gdp_by_continent": lambda: self._run_engine_analysis('avg_gdp_by_continent'),
+            "p2_global_gdp_trend": lambda: self._run_engine_analysis('global_gdp_trend'),
+            "p2_fastest_growing_continent": lambda: self._run_engine_analysis('fastest_growing_continent'),
+            "p2_consistent_decline": lambda: self._run_engine_analysis('consistent_decline'),
+            "p2_continent_contribution": lambda: self._run_engine_analysis('continent_contribution'),
+            "p2_run_all": self._run_all_engine_analyses,
         }
         
         try:
@@ -1661,6 +1695,59 @@ class GDPDashboard:
         except Exception as e:
             messagebox.showerror("Error", f"Export failed: {str(e)}")
     
+    def _build_engine_params(self):
+        continent = self.continent_var.get()
+        years = self.get_year_range()
+        start_year = years[0] if years else 2000
+        end_year = years[-1] if years else 2020
+        top_n = self.top_n_var.get()
+        return {
+            'continent': continent,
+            'year': end_year,
+            'date_range': [start_year, end_year],
+            'top_n': top_n,
+            'decline_years': 5,
+        }
+
+    def _run_engine_analysis(self, analysis_name):
+        import tkinter as tk
+        self.stats_text.config(state=tk.NORMAL)
+        self.stats_text.delete(1.0, tk.END)
+        self.stats_text.config(state=tk.DISABLED)
+
+        params = self._build_engine_params()
+        results = self.engine.run_analysis(analysis_name, params)
+        if results is not None:
+            title = analysis_name.replace('_', ' ').title()
+            self.tkinter_sink.write(results, title=title)
+        else:
+            messagebox.showwarning("Warning", f"No results for: {analysis_name}")
+
+    def _run_all_engine_analyses(self):
+        import tkinter as tk
+        self.stats_text.config(state=tk.NORMAL)
+        self.stats_text.delete(1.0, tk.END)
+        self.stats_text.config(state=tk.DISABLED)
+
+        params = self._build_engine_params()
+        analyses = self.engine.get_available_analyses()
+
+        def run_one(name):
+            results = self.engine.run_analysis(name, params)
+            if results is not None:
+                title = name.replace('_', ' ').title()
+                self.tkinter_sink._append_stats_table(results, list(results[0].keys()), title)
+
+        list(map(run_one, analyses))
+
+        last_results = self.engine.run_analysis(analyses[0], params)
+        if last_results:
+            labels = list(map(lambda r: str(r.get('country', r.get('continent', ''))), last_results))
+            values = list(map(lambda r: float(r.get('gdp', r.get('avg_gdp', r.get('total_gdp', 0)))), last_results))
+            self.tkinter_sink._render_chart('bar', labels, values, 'All Engine Analyses — Top Countries', 'gdp')
+
+        self.notebook.select(self.stats_frame)
+
     def show_default_analysis(self):
         # Dashboard khulte hi pehli country ka graph dikha do
         try:

@@ -1,0 +1,191 @@
+@startuml GDP_Dashboard_Architecture
+
+skinparam backgroundColor #0a0a0a
+skinparam defaultFontColor #e7e9ea
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam roundCorner 12
+
+skinparam package {
+  BackgroundColor #111111
+  BorderColor #2f3336
+  FontColor #e7e9ea
+  StereotypeFontColor #71767b
+}
+
+skinparam class {
+  BackgroundColor #16181c
+  BorderColor #2f3336
+  FontColor #e7e9ea
+  HeaderBackgroundColor #1d9bf0
+  HeaderFontColor #000000
+  AttributeFontColor #71767b
+  StereotypeFontColor #71767b
+}
+
+skinparam arrow {
+  Color #1d9bf0
+  FontColor #71767b
+}
+
+skinparam note {
+  BackgroundColor #1c1c1e
+  BorderColor #2f3336
+  FontColor #e7e9ea
+}
+
+title **GDP Analysis Dashboard — Phase 2 Architecture**\n<size:10>Dependency Inversion Principle (DIP)</size>
+
+' ─────────────────── CORE PACKAGE ───────────────────
+package "core" as CorePkg <<contracts owner>> {
+
+  interface "<<Protocol>>\nDataSink" as DataSink {
+    +write(records, title)
+    +write_chart(chart_type, data, title, options)
+    +write_summary(summary, title)
+  }
+
+  interface "<<Protocol>>\nPipelineService" as PipelineService {
+    +execute(raw_data)
+    +get_available_analyses()
+    +run_analysis(name, params)
+  }
+
+  interface "<<Protocol>>\nDataRecord" as DataRecord {
+    +country_name : str
+    +continent : str
+    +gdp_values : Dict[int,float]
+  }
+
+  class "TransformationEngine" as Engine {
+    -sink : DataSink
+    -config : dict
+    -df : DataFrame
+    -_dispatch : Dict[str, Callable]
+    +execute(raw_data)
+    +load_data(raw_data)
+    +run_analysis(name, params)
+    +get_available_analyses()
+    --
+    8 analyses via dispatch dict
+  }
+
+  Engine .up.|> PipelineService : satisfies
+  Engine --> DataSink : calls sink.write()
+}
+
+' ─────────────────── INPUT PLUGINS ───────────────────
+package "plugins.inputs" as InputPkg <<inbound>> {
+
+  class CsvReader {
+    +file_path : str
+    +read_and_push(service)
+  }
+
+  class JsonReader {
+    +file_path : str
+    +read_and_push(service)
+  }
+
+  class ExcelReader {
+    +file_path : str
+    +read_and_push(service)
+  }
+}
+
+CsvReader --> PipelineService : calls execute()
+JsonReader --> PipelineService : calls execute()
+ExcelReader --> PipelineService : calls execute()
+
+' ─────────────────── OUTPUT PLUGINS ───────────────────
+package "plugins.outputs" as OutputPkg <<outbound>> {
+
+  class ConsoleWriter {
+    +write(records, title)
+    +write_chart(...)
+    +write_summary(...)
+  }
+
+  class GraphicsChartWriter {
+    +write(records, title)
+    +write_chart(...)
+    +write_summary(...)
+    -_save_figure(fig, title)
+  }
+
+  class TkinterSink {
+    +bind(viz_frame, stats_text, notebook)
+    +write(records, title)
+    +write_chart(...)
+    +write_summary(...)
+    -_render_chart(...)
+  }
+}
+
+ConsoleWriter .up.|> DataSink : satisfies
+GraphicsChartWriter .up.|> DataSink : satisfies
+TkinterSink .up.|> DataSink : satisfies
+
+' ─────────────────── ORCHESTRATOR ───────────────────
+package "main.py" as MainPkg <<orchestrator>> {
+
+  class "run_pipeline()" as RunPipeline {
+    reads config.json
+    resolves drivers via importlib
+    wires input → engine → output
+  }
+}
+
+RunPipeline --> InputPkg  : creates reader
+RunPipeline --> OutputPkg : creates sink
+RunPipeline --> Engine    : creates engine
+
+' ─────────────────── DASHBOARD ───────────────────
+package "gdp_dashboard_refactored.py" as DashPkg <<GUI>> {
+
+  class GDPDashboard {
+    -engine : TransformationEngine
+    -tkinter_sink : TkinterSink
+    +perform_analysis()
+    +_run_engine_analysis(name)
+    +_run_all_engine_analyses()
+  }
+}
+
+GDPDashboard --> Engine : run_analysis()
+GDPDashboard --> TkinterSink : bind() + renders in GUI
+
+' ─────────────────── CONFIG ───────────────────
+database "config.json" as Config {
+  pipeline
+  input_drivers
+  output_drivers
+  colors / ui / viz
+}
+
+RunPipeline ..> Config : reads
+GDPDashboard ..> Config : reads
+Engine ..> Config : reads params
+
+' ─────────────────── DATA ───────────────────
+database "gdp_with_continent_filled.xlsx" as Data
+
+InputPkg ..> Data : reads file
+
+' ─────────────────── NOTES ───────────────────
+note right of CorePkg
+  **Golden Rules:**
+  1. Core owns ALL contracts
+  2. Plugins depend on Core, never reverse
+  3. Engine depends on DataSink protocol, not concrete writers
+  4. Readers depend on PipelineService protocol, not Engine
+end note
+
+note bottom of MainPkg
+  CLI entry point:
+  - python main.py               (all analyses)
+  - python main.py top_countries  (single analysis)
+  - python main.py --list         (list analyses)
+end note
+
+@enduml
