@@ -62,11 +62,14 @@ class TransformationEngine:
             'continent_contribution':    self._continent_contribution,
         }
 
-    def execute(self, raw_data: List[Dict[str, Any]]) -> None:
+    def load_data(self, raw_data: List[Dict[str, Any]]) -> None:
         self.df = _raw_to_df(raw_data)
         self.year_columns = sorted(
             filter(lambda c: isinstance(c, int), self.df.columns)
         )
+
+    def execute(self, raw_data: List[Dict[str, Any]]) -> None:
+        self.load_data(raw_data)
 
         pipeline_cfg = self.config.get('pipeline', {})
         analyses = pipeline_cfg.get('analyses', list(self._ANALYSES))
@@ -109,10 +112,10 @@ class TransformationEngine:
         return list(map(
             lambda row: {
                 'rank': row[0],
-                'country': row[1]['Country Name'],
+                'country': row[1][1]['Country Name'],
                 'continent': continent,
                 'year': year,
-                'gdp': row[1][year],
+                'gdp': row[1][1][year],
             },
             enumerate(top.iterrows(), 1),
         ))
@@ -131,10 +134,10 @@ class TransformationEngine:
         return list(map(
             lambda row: {
                 'rank': row[0],
-                'country': row[1]['Country Name'],
+                'country': row[1][1]['Country Name'],
                 'continent': continent,
                 'year': year,
-                'gdp': row[1][year],
+                'gdp': row[1][1][year],
             },
             enumerate(bottom.iterrows(), 1),
         ))
