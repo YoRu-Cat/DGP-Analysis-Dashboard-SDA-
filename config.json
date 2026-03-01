@@ -2,7 +2,7 @@
   "pipeline": {
     "input_driver": "excel",
     "output_driver": "console",
-    "data_source": "data/gdp_with_continent_filled.xlsx",
+    "data_source": "gdp_with_continent_filled.xlsx",
     "analyses": [
       "top_countries",
       "bottom_countries",
@@ -42,6 +42,10 @@
     },
     "chart": {
       "class": "GraphicsChartWriter",
+      "module": "plugins.outputs"
+    },
+    "tkinter": {
+      "class": "TkinterSink",
       "module": "plugins.outputs"
     }
   },
@@ -174,6 +178,47 @@
     {
       "name": "Complete Analysis (All Charts)",
       "value": "phase1_complete"
+    },
+    {
+      "name": "\u2500\u2500\u2500 Phase 2 Engine \u2500\u2500\u2500",
+      "value": "_separator",
+      "disabled": true
+    },
+    {
+      "name": "\u26a1 Top Countries (Engine)",
+      "value": "p2_top_countries"
+    },
+    {
+      "name": "\u26a1 Bottom Countries (Engine)",
+      "value": "p2_bottom_countries"
+    },
+    {
+      "name": "\u26a1 Growth Rate (Engine)",
+      "value": "p2_growth_rate"
+    },
+    {
+      "name": "\u26a1 Avg GDP by Continent",
+      "value": "p2_avg_gdp_by_continent"
+    },
+    {
+      "name": "\u26a1 Global GDP Trend",
+      "value": "p2_global_gdp_trend"
+    },
+    {
+      "name": "\u26a1 Fastest Growing Continent",
+      "value": "p2_fastest_growing_continent"
+    },
+    {
+      "name": "\u26a1 Consistent Decline",
+      "value": "p2_consistent_decline"
+    },
+    {
+      "name": "\u26a1 Continent Contribution",
+      "value": "p2_continent_contribution"
+    },
+    {
+      "name": "\u26a1 Run All Engine Analyses",
+      "value": "p2_run_all"
     }
   ],
   "visualization": {
