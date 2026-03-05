@@ -32,7 +32,7 @@ echo.
 
 REM Check if required packages are installed
 echo Checking dependencies...
-python -c "import pandas, matplotlib, seaborn, numpy" >nul 2>&1
+python -c "import pandas, matplotlib, seaborn, numpy, streamlit, plotly" >nul 2>&1
 if errorlevel 1 (
     echo Installing required packages...
     pip install -r requirements.txt
@@ -45,11 +45,11 @@ if errorlevel 1 (
 
 echo All dependencies satisfied!
 echo.
-echo Launching GDP Analysis Dashboard...
+echo Launching GDP Analysis Dashboard (Streamlit)...
 echo.
 
-REM Launch the dashboard
-python gdp_dashboard.py
+REM Launch the Streamlit dashboard
+python -m streamlit run gdp_dashboard_streamlit.py --server.headless=true --theme.base=dark --theme.primaryColor=#1d9bf0 --theme.backgroundColor=#0a0a0a --theme.secondaryBackgroundColor=#111111 --theme.textColor=#e7e9ea
 
 if errorlevel 1 (
     echo.

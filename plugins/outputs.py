@@ -479,3 +479,61 @@ class TkinterSink:
             values, labels=labels, colors=colors, autopct='%1.1f%%',
             textprops={'color': self._text_color, 'fontsize': self._tick_size},
         )
+
+
+# ══════════════════════════════════════════════════════════════
+# StreamlitSink — DataSink implementation for Streamlit GUI
+# ══════════════════════════════════════════════════════════════
+
+class StreamlitSink:
+    """DataSink that accumulates results for rendering in a Streamlit app.
+
+    Stores tables, chart descriptors, and summary text in session-state-like
+    lists so the Streamlit page can drain them after an engine run.
+    """
+
+    def __init__(self, config: Dict[str, Any] | None = None):
+        self.config = config or {}
+        self._tables: List[Dict[str, Any]] = []
+        self._charts: List[Dict[str, Any]] = []
+        self._summaries: List[str] = []
+
+    # -- protocol methods --
+
+    def write(self, records: List[Dict[str, Any]], title: str = "") -> None:
+        self._tables.append({"title": title, "records": records})
+
+    def write_chart(
+        self,
+        chart_type: str,
+        data: Dict[str, Any],
+        title: str = "",
+        options: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self._charts.append({
+            "chart_type": chart_type,
+            "data": data,
+            "title": title,
+            "options": options or {},
+        })
+
+    def write_summary(self, summary: Dict[str, Any]) -> None:
+        lines = list(map(
+            lambda kv: f"{kv[0].replace('_', ' ').title()}: {_format_value(kv[1])}",
+            summary.items(),
+        ))
+        self._summaries.append("\n".join(lines))
+
+    # -- accessors --
+
+    def drain_tables(self) -> List[Dict[str, Any]]:
+        tables, self._tables = self._tables, []
+        return tables
+
+    def drain_charts(self) -> List[Dict[str, Any]]:
+        charts, self._charts = self._charts, []
+        return charts
+
+    def drain_summaries(self) -> List[str]:
+        summaries, self._summaries = self._summaries, []
+        return summaries

@@ -44,8 +44,8 @@
       "class": "GraphicsChartWriter",
       "module": "plugins.outputs"
     },
-    "tkinter": {
-      "class": "TkinterSink",
+    "streamlit": {
+      "class": "StreamlitSink",
       "module": "plugins.outputs"
     }
   },

@@ -105,14 +105,24 @@ def run_single(analysis_name: str, config_path: str = 'config.json') -> None:
 
 
 def run_gui() -> None:
-    from gdp_dashboard_refactored import main as launch_dashboard
-    launch_dashboard()
+    import subprocess, os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    app_path = os.path.join(script_dir, 'gdp_dashboard_streamlit.py')
+    subprocess.run(
+        [sys.executable, '-m', 'streamlit', 'run', app_path,
+         '--server.headless=true', '--theme.base=dark',
+         '--theme.primaryColor=#1d9bf0',
+         '--theme.backgroundColor=#0a0a0a',
+         '--theme.secondaryBackgroundColor=#111111',
+         '--theme.textColor=#e7e9ea'],
+        cwd=script_dir,
+    )
 
 
 def _print_usage() -> None:
     print("Usage:")
-    print("  python main.py                        Launch GUI dashboard (default)")
-    print("  python main.py --gui                  Launch GUI dashboard")
+    print("  python main.py                        Launch Streamlit dashboard (default)")
+    print("  python main.py --gui                  Launch Streamlit dashboard")
     print("  python main.py --cli                  Run full pipeline in console")
     print("  python main.py <analysis_name>        Run a single analysis (console)")
     print("  python main.py --list                 List available analyses")
@@ -120,7 +130,7 @@ def _print_usage() -> None:
     print("Output driver is set in config.json -> pipeline.output_driver")
     print("  'console'  -> formatted text to stdout")
     print("  'chart'    -> PNG files to output_charts/")
-    print("  'tkinter'  -> render inside GUI dashboard")
+    print("  'streamlit'-> render inside Streamlit dashboard")
 
 
 if __name__ == '__main__':
