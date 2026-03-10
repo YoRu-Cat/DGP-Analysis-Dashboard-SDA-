@@ -7,3 +7,4 @@ mplcyberpunk>=0.7.0
 ttkbootstrap>=1.10.0
 streamlit>=1.30.0
 plotly>=5.18.0
+pycountry>=22.3.5

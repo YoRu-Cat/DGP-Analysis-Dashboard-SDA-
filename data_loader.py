@@ -1,7 +1,3 @@
-
-#Data Loader Module
-#Handles loading GDP data from Excel files with validation.
-
 import pandas as pd
 import json
 import os
@@ -9,14 +5,12 @@ from functools import reduce
 
 
 class ConfigLoader:
-    """Loads and validates configuration from config.json"""
     
     def __init__(self, config_path='config.json'):
         self.config_path = config_path
         self.config = self._load_config()
     
     def _load_config(self):
-        """Load configuration from JSON file"""
         if not os.path.exists(self.config_path):
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
         
@@ -33,7 +27,6 @@ class ConfigLoader:
             raise Exception(f"Failed to load configuration: {str(e)}")
     
     def _validate_config(self, config):
-        """Validate configuration structure"""
         required_sections = ['data', 'ui', 'colors', 'analysis_types', 'visualization']
         
         missing_sections = list(filter(lambda section: section not in config, required_sections))
@@ -48,14 +41,12 @@ class ConfigLoader:
             raise ValueError(f"Missing in data configuration: {', '.join(missing_data_fields)}")
     
     def get(self, section, key=None):
-        """Get configuration value"""
         if key is None:
             return self.config.get(section, {})
         return self.config.get(section, {}).get(key)
 
 
 class GDPDataLoader:
-    """Loads and validates GDP data from Excel files"""
     
     def __init__(self, config):
         self.config = config
@@ -65,7 +56,6 @@ class GDPDataLoader:
         self.continents = []
     
     def load_data(self):
-        """Load GDP data from CSV or Excel file (smart format detection)"""
         file_path = self.config.get('data', 'file_path')
         
         if not os.path.exists(file_path):
@@ -74,16 +64,13 @@ class GDPDataLoader:
                 f"Please ensure the data file (CSV or Excel) exists in the project directory."
             )
         
-        # Smart format detection based on file extension
         file_extension = os.path.splitext(file_path)[1].lower()
         
         try:
             if file_extension == '.csv':
-                # Load CSV file
                 self.df = pd.read_csv(file_path)
                 print(f"Loaded CSV file: {file_path}")
             elif file_extension in ['.xlsx', '.xls']:
-                # Load Excel file
                 self.df = pd.read_excel(file_path)
                 print(f"Loaded Excel file: {file_path}")
             else:
@@ -100,7 +87,6 @@ class GDPDataLoader:
         return self
     
     def _validate_data(self):
-        """Validate loaded data structure"""
         if self.df is None or self.df.empty:
             raise ValueError("Loaded data is empty")
         
@@ -113,13 +99,11 @@ class GDPDataLoader:
                 f"Available columns: {', '.join(map(str, self.df.columns))}"
             )
         
-        # Check for year columns (numeric columns)
         year_cols = list(filter(lambda col: isinstance(col, int), self.df.columns))
         if not year_cols:
             raise ValueError("No year columns found in data (expected numeric column names)")
     
     def _extract_metadata(self):
-        """Extract years, countries, and continents from data"""
         self.year_columns = sorted(
             list(filter(lambda col: isinstance(col, int), self.df.columns))
         )
@@ -138,25 +122,20 @@ class GDPDataLoader:
             raise ValueError("No continents found in data")
     
     def get_dataframe(self):
-        """Get the loaded dataframe"""
         if self.df is None:
             raise ValueError("Data not loaded. Call load_data() first.")
         return self.df
     
     def get_year_columns(self):
-        """Get list of year columns"""
         return self.year_columns
     
     def get_countries(self):
-        """Get list of countries"""
         return self.countries
     
     def get_continents(self):
-        """Get list of continents"""
         return self.continents
     
     def get_summary(self):
-        """Get data summary"""
         if self.df is None:
             return "No data loaded"
         
@@ -166,3 +145,4 @@ class GDPDataLoader:
             'year_range': f"{self.year_columns[0]} - {self.year_columns[-1]}",
             'continents': len(self.continents)
         }
+

@@ -80,7 +80,6 @@ def run_single(analysis_name: str, config_path: str = 'config.json') -> None:
     sink = _create_output(output_drivers, output_driver_name, cfg)
     reader = _create_input(input_drivers, input_driver_name, data_source)
 
-    # Override analyses to empty so execute() loads data but runs nothing
     cfg_single = {
         **cfg,
         'pipeline': {**pipeline, 'analyses': []},
@@ -89,7 +88,6 @@ def run_single(analysis_name: str, config_path: str = 'config.json') -> None:
     from core.engine import TransformationEngine
     engine = TransformationEngine(sink, cfg_single)
 
-    # Use the input plugin to load data (execute loads + runs 0 analyses)
     reader.read_and_push(engine)
 
     params = pipeline.get('default_params', {})
@@ -151,3 +149,4 @@ if __name__ == '__main__':
         _print_usage()
     else:
         run_single(args[0])
+

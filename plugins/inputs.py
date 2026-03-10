@@ -72,3 +72,4 @@ class ExcelReader:
         df = pd.read_excel(self.file_path)
         records = _df_to_records(df)
         service.execute(records)
+

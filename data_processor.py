@@ -1,7 +1,3 @@
-
-#Data Processor Module
-#Handles all GDP data processing, calculations, and statistical operations.
-
 import numpy as np
 import pandas as pd
 from functools import reduce
@@ -9,25 +5,21 @@ from itertools import combinations
 
 
 class GDPDataProcessor:
-    """Processes GDP data and performs calculations"""
     
     def __init__(self, df, year_columns):
         self.df = df
         self.year_columns = year_columns
     
     def get_country_data(self, country, years):
-        """Get GDP data for a specific country across given years"""
         country_data = self.df[self.df['Country Name'] == country]
         if country_data.empty:
             return None
         return country_data[years].values.flatten()
     
     def get_continent_data(self, continent):
-        """Get all data for a specific continent"""
         return self.df[self.df['Continent'] == continent]
     
     def calculate_growth_rates(self, gdp_values, years):
-        """Calculate year-over-year GDP growth rates"""
         value_pairs = list(zip(gdp_values[:-1], gdp_values[1:]))
         year_pairs = list(zip(years[:-1], years[1:]))
         
@@ -48,19 +40,15 @@ class GDPDataProcessor:
         return growth_rates, growth_years
     
     def get_top_countries(self, year, n=10):
-        """Get top N countries by GDP in a specific year"""
         return self.df.nlargest(n, year)
     
     def calculate_total_gdp(self, data, years):
-        """Calculate total GDP across years"""
         return data[years].sum()
     
     def calculate_average_gdp(self, data, years):
-        """Calculate average GDP across years"""
         return data[years].mean(axis=1)
     
     def get_correlation_matrix(self, countries, years):
-        """Build correlation matrix for selected countries"""
         country_data_pairs = list(filter(
             lambda pair: pair[1] is not None,
             map(lambda c: (c, self.get_country_data(c, years)), countries)
@@ -74,7 +62,6 @@ class GDPDataProcessor:
         return corr_df.corr()
     
     def calculate_statistics(self, gdp_values):
-        """Calculate statistical measures for GDP values"""
         valid_gdp = list(filter(lambda g: not np.isnan(g), gdp_values))
         
         if not valid_gdp:
@@ -90,7 +77,6 @@ class GDPDataProcessor:
         }
     
     def calculate_growth_summary(self, gdp_values, years):
-        """Calculate growth summary from first to last value"""
         first_valid = next((g for g in gdp_values if not np.isnan(g)), None)
         last_valid = next((g for g in reversed(gdp_values) if not np.isnan(g)), None)
         
@@ -112,7 +98,6 @@ class GDPDataProcessor:
         return result
     
     def get_continent_summary(self, continent, year):
-        """Get summary statistics for a continent in a specific year"""
         continent_data = self.get_continent_data(continent)
         
         if continent_data.empty:
@@ -126,7 +111,6 @@ class GDPDataProcessor:
         }
     
     def get_world_statistics(self, year):
-        """Get world-level statistics for a specific year"""
         year_data = self.df[year].dropna()
         
         return {
@@ -140,7 +124,6 @@ class GDPDataProcessor:
         }
     
     def get_year_comparison_data(self, comparison_years, continents):
-        """Get GDP data for year comparison across continents"""
         return dict(map(
             lambda year: (year, dict(map(
                 lambda continent: (continent, self.get_continent_data(continent)[year].sum()),
@@ -150,7 +133,6 @@ class GDPDataProcessor:
         ))
     
     def get_top_correlations(self, correlation_matrix, n=10):
-        """Get top N correlations from correlation matrix"""
         countries = correlation_matrix.columns
         
         correlations = list(map(
@@ -163,18 +145,15 @@ class GDPDataProcessor:
 
 
 def filter_by_region(df, region):
-    """Filter dataframe by region"""
     region_col = 'Continent' if 'Continent' in df.columns else 'Region'
     return df[df[region_col] == region]
 
 
 def filter_by_country(df, country):
-    """Filter dataframe by country"""
     return df[df['Country Name'] == country]
 
 
 def calculate_regional_average(df, region, year_columns):
-    """Calculate average GDP for a region"""
     region_data = filter_by_region(df, region)
     
     year_totals = list(map(lambda year: region_data[year].sum(), year_columns))
@@ -186,7 +165,6 @@ def calculate_regional_average(df, region, year_columns):
 
 
 def calculate_regional_sum(df, region, year_columns):
-    """Calculate total GDP sum for a region"""
     region_data = filter_by_region(df, region)
     
     return reduce(
@@ -197,7 +175,6 @@ def calculate_regional_sum(df, region, year_columns):
 
 
 def calculate_country_average(df, country, year_columns):
-    """Calculate average GDP for a country"""
     country_data = filter_by_country(df, country)
     
     if country_data.empty:
@@ -212,7 +189,6 @@ def calculate_country_average(df, country, year_columns):
 
 
 def calculate_country_sum(df, country, year_columns):
-    """Calculate total GDP for a country"""
     country_data = filter_by_country(df, country)
     
     if country_data.empty:
@@ -223,3 +199,4 @@ def calculate_country_sum(df, country, year_columns):
         year_columns,
         0
     )
+

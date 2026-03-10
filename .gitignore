@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+dist/
+build/
+*.spec
+*.log
+.streamlit/
+*.egg-info/
+.devcontainer/

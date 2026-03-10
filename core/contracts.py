@@ -52,3 +52,4 @@ class PipelineService(Protocol):
         analysis_name: str,
         params: Dict[str, Any],
     ) -> Optional[List[Dict[str, Any]]]: ...
+
