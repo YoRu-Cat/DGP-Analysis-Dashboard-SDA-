@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Dict, Any
+
+from phase3.input_module import SENTINEL
 
 
 @dataclass(frozen=True)
@@ -21,6 +24,57 @@ class OutputModule:
         self.config = config
         self.runtime = runtime
 
+    def _notify(self, payload: Dict[str, Any]) -> None:
+        """Sends telemetry updates when an observer is configured."""
+        observer = self.runtime.get("observer")
+        if observer is None:
+            return
+        callback = getattr(observer, "on_telemetry_update", None)
+        if callable(callback):
+            callback(payload)
+
     def run(self) -> None:
         """Runs the output consumer loop."""
-        raise NotImplementedError("OutputModule.run will be implemented in Part 8")
+        queue = self.runtime.get("processed_queue")
+        if queue is None:
+            raise ValueError("runtime['processed_queue'] is required")
+
+        worker_count = int(self.runtime.get("worker_count", 1))
+        results = self.runtime.get("results")
+        if results is None:
+            results = []
+            self.runtime["results"] = results
+
+        refresh = float(self.config.refresh_interval_seconds)
+        done_workers = 0
+        consumed = 0
+        last_packet = None
+
+        while done_workers < worker_count:
+            packet = queue.get()
+            if packet is SENTINEL:
+                done_workers += 1
+                continue
+
+            results.append(packet)
+            consumed += 1
+            last_packet = packet
+
+            if refresh > 0:
+                time.sleep(refresh)
+
+            self._notify({
+                "event": "output_update",
+                "consumed": consumed,
+                "last_packet": last_packet,
+            })
+
+        self.runtime["consumed"] = consumed
+        self.runtime["last_packet"] = last_packet
+        self.runtime["completed"] = True
+
+        self._notify({
+            "event": "output_complete",
+            "consumed": consumed,
+            "last_packet": last_packet,
+        })
