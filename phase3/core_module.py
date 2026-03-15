@@ -8,6 +8,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
+from phase3 import get_phase3_config
+
 
 @dataclass(frozen=True)
 class CoreModuleConfig:
@@ -25,12 +27,11 @@ class StatelessVerifier:
 
     def process(self, packet: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Returns the packet when valid, otherwise None."""
-        entity  = str(packet.get("entity_name", ""))
-        metric  = float(packet.get("metric_value", 0.0))
+        metric = float(packet.get("metric_value", 0.0))
         claimed = str(packet.get("security_hash", ""))
 
-        data     = f"{entity}:{metric:.2f}".encode("utf-8")
-        computed = hashlib.pbkdf2_hmac("sha256", data, self._secret, self._iterations).hex()
+        salt = f"{metric:.2f}".encode("utf-8")
+        computed = hashlib.pbkdf2_hmac("sha256", self._secret, salt, self._iterations).hex()
 
         if not hmac.compare_digest(computed, claimed):
             return None

@@ -45,6 +45,7 @@ class OutputModule:
             results = []
             self.runtime["results"] = results
 
+        state = self.runtime.get("state", self.runtime)
         refresh = float(self.config.refresh_interval_seconds)
         done_workers = 0
         consumed = 0
@@ -69,9 +70,9 @@ class OutputModule:
                 "last_packet": last_packet,
             })
 
-        self.runtime["consumed"] = consumed
-        self.runtime["last_packet"] = last_packet
-        self.runtime["completed"] = True
+        state["consumed"] = consumed
+        state["last_packet"] = last_packet
+        state["completed"] = True
 
         self._notify({
             "event": "output_complete",

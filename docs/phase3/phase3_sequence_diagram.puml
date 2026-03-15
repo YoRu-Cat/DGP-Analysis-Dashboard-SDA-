@@ -1,0 +1,54 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam sequenceArrowColor #71767b
+skinparam sequenceLifeLineBorderColor #1d9bf0
+skinparam sequenceLifeLineBackgroundColor #111111
+skinparam participantBorderColor #1d9bf0
+skinparam participantBackgroundColor #111111
+skinparam participantFontColor #e7e9ea
+
+participant Main as "main.py"
+participant Orch as "PipelineOrchestrator"
+participant In as "InputModule"
+participant Raw as "raw_queue"
+participant Ver as "Verifier Workers"
+participant Proc as "processed_queue"
+participant Agg as "StatefulAggregator"
+participant OutQ as "output_queue"
+participant Out as "OutputModule"
+participant Tel as "PipelineTelemetry"
+participant UI as "Dashboard Observer"
+
+Main -> Orch: run()
+Orch -> In: start producer process
+Orch -> Ver: start N verifier processes
+Orch -> Agg: start aggregator process
+Orch -> Out: start output process
+Orch -> Tel: create telemetry subject
+UI -> Tel: subscribe(observer)
+
+loop input stream
+  In -> Raw: put(mapped packet)
+  Ver -> Raw: get(packet)
+  Ver -> Ver: verify signature
+  alt valid packet
+    Ver -> Proc: put(verified packet)
+    Agg -> Proc: get(packet)
+    Agg -> Agg: compute sliding average
+    Agg -> OutQ: put(aggregated packet)
+    Out -> OutQ: get(packet)
+    Out -> Out: store results / update state
+  else invalid packet
+    Ver -> Ver: drop packet
+  end
+  Orch -> Tel: poll_once()
+  Tel -> UI: publish(snapshot)
+end
+
+In -> Raw: put worker sentinels
+Ver -> Proc: forward sentinels
+Agg -> OutQ: put final sentinel
+Out -> Out: finalize completion state
+Orch -> Orch: finalize runtime summary
+Main <-- Orch: print completion summary
+@enduml

@@ -2,21 +2,38 @@
 
 from __future__ import annotations
 
-from multiprocessing import Manager, Process, Queue, Value
 from dataclasses import dataclass
-from typing import Dict, Any
+from multiprocessing import Manager, Process, Queue, Value
+from time import sleep
+from typing import Any, Dict
 
-from phase3.core_module import StatelessVerifier, StatefulAggregator
-from phase3.input_module import InputModule, build_input_config, SENTINEL
+from phase3 import get_phase3_config
+from phase3.core_module import StatefulAggregator, StatelessVerifier
+from phase3.input_module import InputModule, SENTINEL, build_input_config
+from phase3.output_module import OutputModule, OutputModuleConfig
+from phase3.telemetry import PipelineTelemetry
 
 
 @dataclass(frozen=True)
 class OrchestratorConfig:
-    """Queue sizing configuration for process orchestration."""
+    """Queue sizing and runtime settings for process orchestration."""
 
     raw_queue_max_size: int
     processed_queue_max_size: int
+    output_queue_max_size: int
     core_parallelism: int
+    telemetry_poll_seconds: float
+    output_refresh_seconds: float
+
+
+class _TelemetryCollector:
+    """Collects telemetry snapshots published by the telemetry subject."""
+
+    def __init__(self, snapshots: list) -> None:
+        self._snapshots = snapshots
+
+    def on_telemetry_update(self, snapshot: Dict[str, Any]) -> None:
+        self._snapshots.append(snapshot)
 
 
 def _run_input_stage(config: Dict[str, Any], raw_queue: Queue, num_workers: int) -> None:
@@ -33,7 +50,8 @@ def _run_verifier_worker(
     dropped_counter: Value,
 ) -> None:
     """Runs one stateless verifier worker process."""
-    verifier = StatelessVerifier(config.get("phase3", {}).get("processing", {}).get("stateless_tasks", {}))
+    p3 = get_phase3_config(config)
+    verifier = StatelessVerifier(p3.get("processing", {}).get("stateless_tasks", {}))
 
     while True:
         packet = raw_queue.get()
@@ -56,12 +74,13 @@ def _run_verifier_worker(
 def _run_aggregator_stage(
     config: Dict[str, Any],
     processed_queue: Queue,
+    output_queue: Queue,
     worker_count: int,
-    output_packets: Any,
     verified_counter: Value,
 ) -> None:
     """Runs the stateful aggregator stage until all workers send sentinels."""
-    aggregator = StatefulAggregator(config.get("phase3", {}).get("processing", {}).get("stateful_tasks", {}))
+    p3 = get_phase3_config(config)
+    aggregator = StatefulAggregator(p3.get("processing", {}).get("stateful_tasks", {}))
 
     done_workers = 0
     while done_workers < worker_count:
@@ -71,13 +90,37 @@ def _run_aggregator_stage(
             continue
 
         aggregated = aggregator.process(packet)
-        output_packets.append(aggregated)
+        output_queue.put(aggregated)
         with verified_counter.get_lock():
             verified_counter.value += 1
 
+    output_queue.put(SENTINEL)
+
+
+def _run_output_stage(
+    config: Dict[str, Any],
+    output_queue: Queue,
+    output_results: Any,
+    output_state: Any,
+) -> None:
+    """Runs the output consumer stage in its own process."""
+    p3 = get_phase3_config(config)
+    runtime = {
+        "processed_queue": output_queue,
+        "worker_count": 1,
+        "results": output_results,
+        "state": output_state,
+    }
+    output_cfg = OutputModuleConfig(
+        refresh_interval_seconds=float(
+            p3.get("pipeline_dynamics", {}).get("output_refresh_seconds", 0.0)
+        )
+    )
+    OutputModule(output_cfg, runtime).run()
+
 
 class PipelineOrchestrator:
-    """Coordinates producer, workers, aggregator, and output processes."""
+    """Coordinates producer, workers, aggregator, telemetry, and output processes."""
 
     def __init__(self, config: Dict[str, Any]) -> None:
         """Stores raw orchestrator configuration."""
@@ -86,28 +129,40 @@ class PipelineOrchestrator:
 
     def _build_runtime_config(self) -> OrchestratorConfig:
         """Builds typed orchestration settings from config."""
-        p3 = self.config.get("phase3", {})
+        p3 = get_phase3_config(self.config)
         dynamics = p3.get("pipeline_dynamics", {})
         queue_size = int(dynamics.get("stream_queue_max_size", 50))
         return OrchestratorConfig(
             raw_queue_max_size=queue_size,
             processed_queue_max_size=queue_size,
+            output_queue_max_size=queue_size,
             core_parallelism=int(dynamics.get("core_parallelism", 4)),
+            telemetry_poll_seconds=float(dynamics.get("telemetry_poll_seconds", 0.05)),
+            output_refresh_seconds=float(dynamics.get("output_refresh_seconds", 0.0)),
         )
 
-    def run(self) -> None:
-        """Builds queues, starts worker processes, and manages lifecycle."""
+    def start(self) -> Dict[str, Any]:
+        """Creates queues, starts processes, and returns runtime handles."""
         runtime_cfg = self._build_runtime_config()
 
         raw_queue = Queue(maxsize=runtime_cfg.raw_queue_max_size)
         processed_queue = Queue(maxsize=runtime_cfg.processed_queue_max_size)
+        output_queue = Queue(maxsize=runtime_cfg.output_queue_max_size)
 
         manager = Manager()
-        output_packets = manager.list()
-
+        output_results = manager.list()
+        output_state = manager.dict({"consumed": 0, "completed": False, "last_packet": None})
         seen_counter = Value("i", 0)
         dropped_counter = Value("i", 0)
         verified_counter = Value("i", 0)
+
+        telemetry_snapshots: list = []
+        telemetry = PipelineTelemetry({
+            "raw_stream": raw_queue,
+            "processed_stream": processed_queue,
+            "output_stream": output_queue,
+        })
+        telemetry.subscribe(_TelemetryCollector(telemetry_snapshots))
 
         processes = [
             Process(
@@ -129,36 +184,92 @@ class PipelineOrchestrator:
         processes.append(
             Process(
                 target=_run_aggregator_stage,
-                args=(self.config, processed_queue, runtime_cfg.core_parallelism, output_packets, verified_counter),
+                args=(self.config, processed_queue, output_queue, runtime_cfg.core_parallelism, verified_counter),
                 name="p3-aggregator",
             )
         )
+        processes.append(
+            Process(
+                target=_run_output_stage,
+                args=(self.config, output_queue, output_results, output_state),
+                name="p3-output",
+            )
+        )
+
+        for proc in processes:
+            proc.start()
+
+        return {
+            "config": runtime_cfg,
+            "manager": manager,
+            "raw_queue": raw_queue,
+            "processed_queue": processed_queue,
+            "output_queue": output_queue,
+            "processes": processes,
+            "seen_counter": seen_counter,
+            "dropped_counter": dropped_counter,
+            "verified_counter": verified_counter,
+            "output_results": output_results,
+            "output_state": output_state,
+            "telemetry": telemetry,
+            "telemetry_snapshots": telemetry_snapshots,
+        }
+
+    def is_running(self, runtime: Dict[str, Any]) -> bool:
+        """Returns True while any worker process is still alive."""
+        return any(proc.is_alive() for proc in runtime["processes"])
+
+    def poll(self, runtime: Dict[str, Any]) -> Dict[str, Any]:
+        """Polls one live telemetry snapshot from the active queues."""
+        return runtime["telemetry"].poll_once()
+
+    def stop(self, runtime: Dict[str, Any]) -> None:
+        """Terminates any still-running pipeline processes."""
+        for proc in runtime["processes"]:
+            if proc.is_alive():
+                proc.terminate()
+        for proc in runtime["processes"]:
+            proc.join()
+
+    def finalize(self, runtime: Dict[str, Any]) -> Dict[str, Any]:
+        """Joins processes and builds the final run summary."""
+        for proc in runtime["processes"]:
+            proc.join()
+
+        packets = list(runtime["output_results"])
+        final_avg = packets[-1].get("computed_metric") if packets else None
+        output_state = dict(runtime["output_state"])
+
+        self.last_run = {
+            "packets_seen": runtime["seen_counter"].value,
+            "verified": runtime["verified_counter"].value,
+            "dropped": runtime["dropped_counter"].value,
+            "final_average": final_avg,
+            "results": packets,
+            "telemetry": list(runtime["telemetry_snapshots"]),
+            "output": output_state,
+        }
+        runtime["manager"].shutdown()
+        return self.last_run
+
+    def run(self) -> None:
+        """Builds queues, starts worker processes, polls telemetry, and prints a summary."""
+        runtime = self.start()
 
         try:
-            for proc in processes:
-                proc.start()
-
-            for proc in processes:
-                proc.join()
+            while self.is_running(runtime):
+                self.poll(runtime)
+                sleep(runtime["config"].telemetry_poll_seconds)
         finally:
-            for proc in processes:
+            for proc in runtime["processes"]:
                 if proc.is_alive():
                     proc.terminate()
                     proc.join()
 
-        packets = list(output_packets)
-        final_avg = packets[-1].get("computed_metric") if packets else None
-
-        self.last_run = {
-            "packets_seen": seen_counter.value,
-            "verified": verified_counter.value,
-            "dropped": dropped_counter.value,
-            "final_average": final_avg,
-            "results": packets,
-        }
+        summary = self.finalize(runtime)
 
         print("Phase 3 pipeline complete.")
-        print(f"Packets seen: {seen_counter.value}")
-        print(f"Verified:     {verified_counter.value}")
-        print(f"Dropped:      {dropped_counter.value}")
-        print(f"Final avg:    {final_avg if final_avg is not None else 'N/A'}")
+        print(f"Packets seen: {summary['packets_seen']}")
+        print(f"Verified:     {summary['verified']}")
+        print(f"Dropped:      {summary['dropped']}")
+        print(f"Final avg:    {summary['final_average'] if summary['final_average'] is not None else 'N/A'}")

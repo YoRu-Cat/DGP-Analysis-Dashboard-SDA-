@@ -598,31 +598,24 @@ def _render_p3_results(
 
 
 def _render_phase3_pipeline(cfg: dict) -> None:
-    """
-    Renders Phase 3 as a continuous pipeline that keeps processing until stopped.
-
-    Work is executed in small batches per rerun so the Stop button remains
-    responsive while metrics, queue bars, and charts keep updating live.
-    """
+    """Renders the real Phase 3 multiprocessing pipeline inside the dashboard."""
     import csv as _csv_r
-    from pathlib import Path as _Pth
-    from phase3.input_module import build_input_config, SchemaMapper
-    from phase3.core_module import StatelessVerifier, StatefulAggregator
+    import time as _time
+    from phase3 import get_phase3_config, resolve_dataset_path
+    from phase3.orchestrator import PipelineOrchestrator
     from phase3.telemetry import TelemetryThresholds
 
-    p3 = cfg.get("phase3", {})
+    p3 = get_phase3_config(cfg)
     dyn = p3.get("pipeline_dynamics", {})
     proc = p3.get("processing", {})
+    viz = p3.get("visualizations", {})
+    telemetry_cfg = viz.get("telemetry", {})
+    chart_specs = viz.get("data_charts", [])
     sl_cfg = proc.get("stateless_tasks", {})
     sf_cfg = proc.get("stateful_tasks", {})
     queue_max = int(dyn.get("stream_queue_max_size", 50))
     thresholds = TelemetryThresholds()
-    batch_size = int(dyn.get("ui_batch_size", 12))
-    max_results_kept = int(dyn.get("ui_result_buffer_size", 1500))
-    max_chart_points = int(dyn.get("ui_chart_points", 500))
-
-    script_dir = _Pth(__file__).parent
-    data_path = (script_dir / p3.get("dataset_path", "")).resolve()
+    data_path = resolve_dataset_path(p3.get("dataset_path", ""))
 
     st.markdown(
         '<div class="dashboard-title"><h1>Phase 3 · Sensor Pipeline</h1></div>',
@@ -634,210 +627,189 @@ def _render_phase3_pipeline(cfg: dict) -> None:
         return
 
     if "_p3_runtime" not in st.session_state:
-        st.session_state["_p3_runtime"] = {
-            "running": False,
-            "raw_rows": [],
-            "row_idx": 0,
-            "packet_no": 0,
-            "verified_ct": 0,
-            "dropped_ct": 0,
-            "chart_xs": [],
-            "chart_ys": [],
-            "recent_results": [],
-            "latest_metric": None,
-            "mapper": None,
-            "verifier": None,
-            "aggregator": None,
-        }
+        st.session_state["_p3_runtime"] = None
+    if "_p3_last_run" not in st.session_state:
+        st.session_state["_p3_last_run"] = None
 
-    rt = st.session_state["_p3_runtime"]
+    with open(data_path, newline="", encoding="utf-8") as _f:
+        preview_rows = list(_csv_r.DictReader(_f))
 
     with st.expander("Pipeline Configuration", expanded=False):
-        with open(data_path, newline="", encoding="utf-8") as _f:
-            _preview_rows = list(_csv_r.DictReader(_f))
         _cc = st.columns(4)
-        _cc[0].metric("Dataset Rows", len(_preview_rows))
+        _cc[0].metric("Dataset Rows", len(preview_rows))
         _cc[1].metric("Sliding Window", sf_cfg.get("running_average_window_size", 10))
         _cc[2].metric("PBKDF2 Iterations", f"{int(sl_cfg.get('iterations', 100000)):,}")
         _cc[3].metric("Queue Capacity", queue_max)
         st.caption(
-            f"Mode: continuous until stop  ·  Batch size: {batch_size} packets/rerun  ·  "
-            f"Max rows shown: {max_results_kept}"
+            f"Queue telemetry is read from live multiprocessing queues  ·  "
+            f"Core workers: {int(dyn.get('core_parallelism', 4))}"
         )
 
-    def _q_html(label: str, fill: float) -> str:
+    def _q_html(label: str, snapshot: dict) -> str:
+        fill = float(snapshot.get("utilization", 0.0))
         color = "#00ba7c" if fill < thresholds.flowing_max else "#ffad1f" if fill < thresholds.warning_max else "#f4212e"
-        status = "FLOWING" if fill < thresholds.flowing_max else "WARNING" if fill < thresholds.warning_max else "CRITICAL"
+        status = str(snapshot.get("state", "flowing")).upper()
+        size = int(snapshot.get("size", 0))
+        capacity = int(snapshot.get("capacity", queue_max))
         return (
             f'<div style="padding:12px 14px;background:#111111;border:1px solid #1a1a1a;border-radius:8px;">'
             f'<div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:6px;">'
             f'<span style="color:#6b7280;">{label}</span>'
-            f'<span style="color:{color};font-weight:600;">{status}&nbsp;&nbsp;{fill*queue_max:.0f}/{queue_max}</span>'
+            f'<span style="color:{color};font-weight:600;">{status}&nbsp;&nbsp;{size}/{capacity}</span>'
             f'</div>'
             f'<div style="background:#1a1a1a;border-radius:4px;height:8px;">'
             f'<div style="background:{color};width:{min(fill,1.0)*100:.1f}%;height:8px;border-radius:4px;"></div>'
             f'</div></div>'
         )
 
+    def _render_configured_charts(records: list) -> None:
+        rows = [row for row in records if isinstance(row, dict)]
+        if not rows or not chart_specs:
+            return
+
+        tabs = st.tabs([spec.get("title", f"Chart {idx + 1}") for idx, spec in enumerate(chart_specs)])
+        for tab, spec in zip(tabs, chart_specs):
+            x_axis = spec.get("x_axis", "time_period")
+            y_axis = spec.get("y_axis", "metric_value")
+            title = spec.get("title", y_axis)
+            chart_rows = [row for row in rows if row.get(x_axis) is not None and row.get(y_axis) is not None]
+            with tab:
+                if not chart_rows:
+                    st.info(f"No data available for {title}.")
+                    continue
+                _fig = go.Figure(layout=_PLOTLY_LAYOUT)
+                _fig.add_trace(go.Scatter(
+                    x=[row[x_axis] for row in chart_rows],
+                    y=[row[y_axis] for row in chart_rows],
+                    mode="lines+markers",
+                    line=dict(color="#1d9bf0" if y_axis == "computed_metric" else "#00ba7c", width=2.5),
+                    marker=dict(size=5),
+                    name=title,
+                ))
+                _fig.update_layout(title=title, xaxis_title=x_axis, yaxis_title=y_axis, height=360)
+                st.plotly_chart(_fig, use_container_width=True)
+
+    class _DashboardTelemetryObserver:
+        def __init__(self, runtime: dict) -> None:
+            self._runtime = runtime
+
+        def on_telemetry_update(self, snapshot: dict) -> None:
+            self._runtime["latest_snapshot"] = snapshot
+
     c_start, c_stop, c_reset = st.columns([1, 1, 1])
     if c_start.button("▶ Start Continuous Pipeline", type="primary", use_container_width=True):
-        input_cfg = build_input_config(cfg)
-        with open(input_cfg.dataset_path, newline="", encoding="utf-8") as _f:
-            raw_rows = list(_csv_r.DictReader(_f))
-
-        rt.update({
-            "running": True,
-            "raw_rows": raw_rows,
-            "row_idx": 0,
-            "packet_no": 0,
-            "verified_ct": 0,
-            "dropped_ct": 0,
-            "chart_xs": [],
-            "chart_ys": [],
-            "recent_results": [],
-            "latest_metric": None,
-            "mapper": SchemaMapper(input_cfg.columns),
-            "verifier": StatelessVerifier(sl_cfg),
-            "aggregator": StatefulAggregator(sf_cfg),
-        })
-        st.session_state["_p3_runtime"] = rt
+        orchestrator = PipelineOrchestrator(cfg)
+        runtime = orchestrator.start()
+        runtime["latest_snapshot"] = None
+        runtime["dashboard_observer"] = _DashboardTelemetryObserver(runtime)
+        runtime["telemetry"].subscribe(runtime["dashboard_observer"])
+        st.session_state["_p3_runtime"] = {"orchestrator": orchestrator, "runtime": runtime}
+        st.session_state["_p3_last_run"] = None
         st.rerun()
 
     if c_stop.button("■ Stop", type="secondary", use_container_width=True):
-        rt["running"] = False
+        live = st.session_state.get("_p3_runtime")
+        if live is not None:
+            live["orchestrator"].stop(live["runtime"])
+            st.session_state["_p3_last_run"] = live["orchestrator"].finalize(live["runtime"])
+            st.session_state["_p3_runtime"] = None
+            st.rerun()
 
     if c_reset.button("↺ Reset", type="secondary", use_container_width=True):
-        rt.update({
-            "running": False,
-            "raw_rows": [],
-            "row_idx": 0,
-            "packet_no": 0,
-            "verified_ct": 0,
-            "dropped_ct": 0,
-            "chart_xs": [],
-            "chart_ys": [],
-            "recent_results": [],
-            "latest_metric": None,
-            "mapper": None,
-            "verifier": None,
-            "aggregator": None,
-        })
-        st.session_state["_p3_runtime"] = rt
+        live = st.session_state.get("_p3_runtime")
+        if live is not None:
+            live["orchestrator"].stop(live["runtime"])
+        st.session_state["_p3_runtime"] = None
+        st.session_state["_p3_last_run"] = None
         st.rerun()
 
-    if not rt["running"] and rt["packet_no"] == 0:
+    live = st.session_state.get("_p3_runtime")
+    summary = st.session_state.get("_p3_last_run")
+
+    if live is None and summary is None:
         st.info("Press **▶ Start Continuous Pipeline** to begin streaming and use **■ Stop** to halt it.")
+        return
 
-    total_rows = max(1, len(rt["raw_rows"]))
-    cycle_no = (rt["packet_no"] // total_rows) + 1
-    cycle_pos = rt["row_idx"] % total_rows if total_rows else 0
+    if live is not None:
+        orchestrator = live["orchestrator"]
+        runtime = live["runtime"]
+        snapshot = orchestrator.poll(runtime)
+        snapshot = runtime.get("latest_snapshot") or snapshot
+        running = orchestrator.is_running(runtime)
 
-    prog = st.progress(
-        cycle_pos / total_rows,
-        f"Cycle {cycle_no}  ·  Position {cycle_pos + 1}/{total_rows}  ·  "
-        f"Status: {'RUNNING' if rt['running'] else 'STOPPED'}",
-    )
+        if not running:
+            st.session_state["_p3_last_run"] = orchestrator.finalize(runtime)
+            st.session_state["_p3_runtime"] = None
+            st.rerun()
 
-    _kpi = st.columns(4)
-    _kpi[0].metric("Packets In", rt["packet_no"])
-    _safe_total = max(rt["packet_no"], 1)
-    _kpi[1].metric("Verified ✓", rt["verified_ct"], delta=f"{rt['verified_ct'] / _safe_total * 100:.1f}%")
-    _kpi[2].metric("Dropped ✗", rt["dropped_ct"], delta=f"-{rt['dropped_ct'] / _safe_total * 100:.1f}%", delta_color="inverse")
-    _kpi[3].metric("Sliding Avg", f"{rt['latest_metric']:.4f}" if rt["latest_metric"] is not None else "—")
+        seen = runtime["seen_counter"].value
+        verified = runtime["verified_counter"].value
+        dropped = runtime["dropped_counter"].value
+        output_state = dict(runtime["output_state"])
+        results = list(runtime["output_results"])
+        latest_metric = None
+        last_packet = output_state.get("last_packet")
+        if isinstance(last_packet, dict):
+            latest_metric = last_packet.get("computed_metric")
 
-    st.markdown(
-        '<p style="color:#6b7280;font-size:0.78rem;font-weight:600;'
-        'text-transform:uppercase;letter-spacing:0.1em;margin:14px 0 6px 0;">'
-        'Queue Telemetry · Backpressure</p>',
-        unsafe_allow_html=True,
-    )
-
-    _verified_ratio = rt["verified_ct"] / _safe_total
-    _load_ratio = min(1.0, batch_size / max(queue_max, 1))
-    rq_fill = min(0.95, max(0.03, 0.18 + 0.62 * _load_ratio + 0.10 * np.random.rand()))
-    pq_fill = min(0.90, max(0.02, 0.10 + 0.55 * _verified_ratio + 0.10 * np.random.rand()))
-    _qc = st.columns(2)
-    _qc[0].markdown(_q_html("Raw Queue  (Input → Verify)", rq_fill), unsafe_allow_html=True)
-    _qc[1].markdown(_q_html("Processed Queue  (Verify → Aggregate)", pq_fill), unsafe_allow_html=True)
-
-    if len(rt["chart_ys"]) >= 2:
-        _fig = go.Figure(layout=_PLOTLY_LAYOUT)
-        _fig.add_trace(go.Scatter(
-            x=rt["chart_xs"], y=rt["chart_ys"], mode="lines",
-            line=dict(color="#1d9bf0", width=2),
-            fill="tozeroy", fillcolor="rgba(29,155,240,0.08)",
-            name="Sliding Avg",
-        ))
-        _fig.update_layout(
-            title=f"Live Sliding Window Average · Last {len(rt['chart_ys'])} points",
-            xaxis_title="Packet #", yaxis_title="Sensor Value (avg)",
-            height=300, margin=dict(l=60, r=30, t=45, b=50),
+        total_rows = max(1, len(preview_rows))
+        cycle_no = (seen // total_rows) + 1
+        cycle_pos = seen % total_rows
+        st.progress(
+            cycle_pos / total_rows,
+            f"Cycle {cycle_no}  ·  Position {cycle_pos + 1}/{total_rows}  ·  Status: RUNNING",
         )
-        st.plotly_chart(_fig, use_container_width=True)
 
-    if rt["running"]:
-        mapper = rt["mapper"]
-        verifier = rt["verifier"]
-        aggregator = rt["aggregator"]
-        raw_rows = rt["raw_rows"]
+        _kpi = st.columns(4)
+        _safe_total = max(seen, 1)
+        _kpi[0].metric("Packets In", seen)
+        _kpi[1].metric("Verified ✓", verified, delta=f"{verified / _safe_total * 100:.1f}%")
+        _kpi[2].metric("Dropped ✗", dropped, delta=f"-{dropped / _safe_total * 100:.1f}%", delta_color="inverse")
+        _kpi[3].metric("Sliding Avg", f"{latest_metric:.4f}" if latest_metric is not None else "—")
 
-        for _ in range(batch_size):
-            if not raw_rows:
-                break
+        st.markdown(
+            '<p style="color:#6b7280;font-size:0.78rem;font-weight:600;'
+            'text-transform:uppercase;letter-spacing:0.1em;margin:14px 0 6px 0;">'
+            'Queue Telemetry · Backpressure</p>',
+            unsafe_allow_html=True,
+        )
 
-            raw_row = raw_rows[rt["row_idx"] % len(raw_rows)]
-            rt["row_idx"] += 1
-            rt["packet_no"] += 1
-            pkt_no = rt["packet_no"]
+        queue_cards = []
+        if telemetry_cfg.get("show_raw_stream", True):
+            queue_cards.append(("Raw Queue  (Input → Verify)", snapshot["queues"].get("raw_stream", {})))
+        if telemetry_cfg.get("show_intermediate_stream", True):
+            queue_cards.append(("Processed Queue  (Verify → Aggregate)", snapshot["queues"].get("processed_stream", {})))
+        if telemetry_cfg.get("show_processed_stream", True):
+            queue_cards.append(("Output Queue  (Aggregate → Output)", snapshot["queues"].get("output_stream", {})))
 
-            packet = mapper.map_row(raw_row)
-            is_verified = False
-            c_metric = None
-            metric_val = float(raw_row.get("Raw_Value", "0") or "0")
+        q_cols = st.columns(len(queue_cards)) if queue_cards else []
+        for col, (label, q_snapshot) in zip(q_cols, queue_cards):
+            col.markdown(_q_html(label, q_snapshot), unsafe_allow_html=True)
 
-            if packet is not None:
-                v_pkt = verifier.process(packet)
-                if v_pkt is not None:
-                    is_verified = True
-                    rt["verified_ct"] += 1
-                    a_pkt = aggregator.process(v_pkt)
-                    c_metric = a_pkt.get("computed_metric")
-                    rt["latest_metric"] = c_metric
-                    if c_metric is not None:
-                        rt["chart_xs"].append(pkt_no)
-                        rt["chart_ys"].append(c_metric)
-                        if len(rt["chart_xs"]) > max_chart_points:
-                            rt["chart_xs"] = rt["chart_xs"][-max_chart_points:]
-                            rt["chart_ys"] = rt["chart_ys"][-max_chart_points:]
-                else:
-                    rt["dropped_ct"] += 1
-            else:
-                rt["dropped_ct"] += 1
+        _render_configured_charts(results)
+        if results:
+            _render_p3_results(
+                results,
+                total_packets=seen,
+                verified_count=verified,
+                dropped_count=dropped,
+            )
 
-            rt["recent_results"].append({
-                "packet_no": pkt_no,
-                "entity_name": raw_row.get("Sensor_ID", ""),
-                "time_period": raw_row.get("Timestamp", ""),
-                "metric_value": metric_val,
-                "verified": is_verified,
-                "computed_metric": c_metric,
-            })
-            if len(rt["recent_results"]) > max_results_kept:
-                rt["recent_results"] = rt["recent_results"][-max_results_kept:]
-
-        st.session_state["_p3_runtime"] = rt
+        _time.sleep(0.2)
         st.rerun()
 
-    if rt["packet_no"] > 0:
+    if summary is not None:
         st.success(
-            f"Pipeline {('running' if rt['running'] else 'stopped')} — "
-            f"processed {rt['packet_no']:,} packets so far"
+            f"Pipeline complete — {summary['verified']}/{summary['packets_seen']} packets verified  ·  "
+            f"{summary['dropped']} dropped  ·  Final sliding avg: "
+            f"{summary['final_average'] if summary['final_average'] is not None else 'N/A'}"
         )
+        _render_configured_charts(summary.get("results", []))
         _render_p3_results(
-            rt["recent_results"],
-            total_packets=rt["packet_no"],
-            verified_count=rt["verified_ct"],
-            dropped_count=rt["dropped_ct"],
+            summary.get("results", []),
+            total_packets=summary.get("packets_seen", 0),
+            verified_count=summary.get("verified", 0),
+            dropped_count=summary.get("dropped", 0),
         )
 
 if analysis_choice == "Geographic Map":

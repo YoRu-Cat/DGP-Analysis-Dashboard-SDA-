@@ -6,8 +6,9 @@ import csv
 import time
 from dataclasses import dataclass
 from multiprocessing import Queue
-from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from phase3 import get_phase3_config, resolve_dataset_path
 
 
 SENTINEL = None
@@ -40,7 +41,7 @@ class InputModuleConfig:
 
 def build_input_config(cfg: Dict[str, Any]) -> InputModuleConfig:
     """Builds InputModuleConfig from the raw configuration dictionary."""
-    p3 = cfg.get("phase3", {})
+    p3 = get_phase3_config(cfg)
     dynamics = p3.get("pipeline_dynamics", {})
     raw_columns = p3.get("schema_mapping", {}).get("columns", [])
 
@@ -54,7 +55,7 @@ def build_input_config(cfg: Dict[str, Any]) -> InputModuleConfig:
     ]
 
     return InputModuleConfig(
-        dataset_path=p3.get("dataset_path", ""),
+        dataset_path=str(resolve_dataset_path(p3.get("dataset_path", ""))),
         input_delay_seconds=float(dynamics.get("input_delay_seconds", 0.01)),
         columns=columns,
     )
@@ -97,7 +98,7 @@ class InputModule:
 
     def run(self) -> None:
         """Reads rows, maps packets, pushes queue items, and sends sentinels."""
-        path = Path(self._config.dataset_path)
+        path = resolve_dataset_path(self._config.dataset_path)
         if not path.exists():
             raise FileNotFoundError(f"Input dataset not found: {path}")
 

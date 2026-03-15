@@ -1,0 +1,81 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam classBackgroundColor #111111
+skinparam classBorderColor #1d9bf0
+skinparam classFontColor #e7e9ea
+skinparam arrowColor #71767b
+skinparam packageStyle rectangle
+
+package "Phase 3 Pipeline" {
+  class InputModule {
+    +run()
+  }
+
+  class SchemaMapper {
+    +map_row(raw_row)
+  }
+
+  class StatelessVerifier {
+    +process(packet)
+  }
+
+  class StatefulAggregator {
+    +process(packet)
+  }
+
+  class PipelineTelemetry {
+    +subscribe(observer)
+    +unsubscribe(observer)
+    +poll_once()
+    +publish(snapshot)
+  }
+
+  class OutputModule {
+    +run()
+  }
+
+  class PipelineOrchestrator {
+    +start()
+    +poll(runtime)
+    +stop(runtime)
+    +finalize(runtime)
+    +run()
+  }
+
+  interface TelemetryObserver {
+    +on_telemetry_update(snapshot)
+  }
+
+  interface GenericInputModule
+  interface GenericCoreModule
+  interface GenericOutputModule
+  interface PipelineTelemetrySubject
+  interface PacketProcessor
+
+  class raw_queue
+  class processed_queue
+  class output_queue
+}
+
+InputModule ..|> GenericInputModule
+OutputModule ..|> GenericOutputModule
+StatelessVerifier ..|> PacketProcessor
+StatefulAggregator ..|> PacketProcessor
+PipelineTelemetry ..|> PipelineTelemetrySubject
+PipelineTelemetrySubject --> TelemetryObserver
+SchemaMapper <-- InputModule
+InputModule --> raw_queue
+raw_queue --> StatelessVerifier
+StatelessVerifier --> processed_queue
+processed_queue --> StatefulAggregator
+StatefulAggregator --> output_queue
+output_queue --> OutputModule
+PipelineOrchestrator --> InputModule
+PipelineOrchestrator --> StatelessVerifier
+PipelineOrchestrator --> StatefulAggregator
+PipelineOrchestrator --> OutputModule
+PipelineOrchestrator --> PipelineTelemetry
+PipelineTelemetry ..> raw_queue
+PipelineTelemetry ..> processed_queue
+PipelineTelemetry ..> output_queue
+@enduml
