@@ -103,25 +103,83 @@ def run_single(analysis_name: str, config_path: str = 'config.json') -> None:
 
 
 def run_gui() -> None:
-    import subprocess, os
+    import subprocess, os, socket, time, webbrowser
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     app_path = os.path.join(script_dir, 'gdp_dashboard_streamlit.py')
-    subprocess.run(
-        [sys.executable, '-m', 'streamlit', 'run', app_path,
-         '--server.headless=true', '--theme.base=dark',
-         '--theme.primaryColor=#1d9bf0',
-         '--theme.backgroundColor=#0a0a0a',
-         '--theme.secondaryBackgroundColor=#111111',
-         '--theme.textColor=#e7e9ea'],
+    port = 8501
+
+    st_dir = os.path.join(script_dir, '.streamlit')
+    os.makedirs(st_dir, exist_ok=True)
+    cred = os.path.join(st_dir, 'credentials.toml')
+    if not os.path.exists(cred):
+        open(cred, 'w').write('[general]\nemail = ""\n')
+    cfg_toml = os.path.join(st_dir, 'config.toml')
+    if not os.path.exists(cfg_toml):
+        open(cfg_toml, 'w').write(
+            '[server]\nheadless = true\n'
+            f'port = {port}\nenableCORS = false\nenableXsrfProtection = false\n\n'
+            '[browser]\ngatherUsageStats = false\n'
+            f'serverAddress = "localhost"\nserverPort = {port}\n\n'
+            '[global]\ndevelopmentMode = false\n'
+        )
+
+    proc = subprocess.Popen(
+        [
+            sys.executable, '-m', 'streamlit', 'run', app_path,
+            '--server.headless=true',
+            f'--server.port={port}',
+            '--browser.gatherUsageStats=false',
+            '--global.developmentMode=false',
+        ],
         cwd=script_dir,
     )
+
+    deadline = time.time() + 30
+    ready = False
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(('127.0.0.1', port), timeout=1):
+                ready = True
+                break
+        except OSError:
+            time.sleep(0.3)
+
+    if not ready:
+        print('ERROR: Streamlit server did not start in time.')
+        proc.terminate()
+        return
+
+    url = f'http://localhost:{port}'
+
+    _BROWSERS = [
+        r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+        r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+        r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+        r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+    ]
+    browser_path = next((b for b in _BROWSERS if os.path.isfile(b)), None)
+
+    if browser_path:
+        app_proc = subprocess.Popen([
+            browser_path,
+            f'--app={url}',
+            '--window-size=1600,900',
+            '--disable-extensions',
+            '--new-window',
+        ])
+        app_proc.wait()
+    else:
+        webbrowser.open(url)
+        proc.wait()
 
 
 def _print_usage() -> None:
     print("Usage:")
     print("  python main.py                        Launch Streamlit dashboard (default)")
     print("  python main.py --gui                  Launch Streamlit dashboard")
-    print("  python main.py --cli                  Run full pipeline in console")
+    print("  python main.py --cli                  Run full GDP pipeline in console")
+    print("  python main.py --phase3               Run Phase 3 concurrent pipeline (console)")
     print("  python main.py <analysis_name>        Run a single analysis (console)")
     print("  python main.py --list                 List available analyses")
     print()
@@ -132,12 +190,19 @@ def _print_usage() -> None:
 
 
 if __name__ == '__main__':
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     args = sys.argv[1:]
 
     if not args or args[0] == '--gui':
         run_gui()
     elif args[0] == '--cli':
         run_pipeline()
+    elif args[0] == '--phase3':
+        from phase3.orchestrator import PipelineOrchestrator
+        cfg = _load_config('config.json')
+        PipelineOrchestrator(cfg).run()
     elif args[0] == '--list':
         from core.engine import TransformationEngine
         print("Available analyses:")

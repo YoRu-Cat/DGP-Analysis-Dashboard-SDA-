@@ -59,15 +59,16 @@ def _port_ready(port, timeout=30):
 
 
 def _run_streamlit(dashboard_path):
-    sys.argv = [
-        "streamlit", "run", dashboard_path,
-        "--global.developmentMode", "false",
-        "--server.headless", "true",
-        "--browser.gatherUsageStats", "false",
-        "--server.port", str(SERVER_PORT),
-    ]
-    from streamlit.web.cli import main as st_main
-    st_main()
+    subprocess.Popen(
+        [
+            sys.executable, "-m", "streamlit", "run", dashboard_path,
+            "--server.headless=true",
+            "--server.port", str(SERVER_PORT),
+            "--browser.gatherUsageStats=false",
+            "--global.developmentMode=false",
+        ],
+        cwd=os.path.dirname(dashboard_path),
+    )
 
 
 _BROWSER_SEARCH = [
@@ -115,8 +116,7 @@ def main():
 
     dashboard = os.path.join(base, "gdp_dashboard_streamlit.py")
 
-    server_thread = threading.Thread(target=_run_streamlit, args=(dashboard,), daemon=True)
-    server_thread.start()
+    _run_streamlit(dashboard)
 
     if not _port_ready(SERVER_PORT):
         print("ERROR: Streamlit server did not start in time.")
