@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import streamlit as st
 import numpy as np
@@ -218,6 +218,57 @@ _CUSTOM_CSS = """
         line-height: 1.55;
     }
 
+
+    .nav-item-active {
+        background: linear-gradient(135deg, rgba(29,155,240,0.14), rgba(29,155,240,0.07));
+        border: 1px solid rgba(29,155,240,0.28);
+        border-left: 3px solid #1d9bf0;
+        border-radius: 6px;
+        color: #e7e9ea;
+        padding: 8px 14px;
+        font-size: 0.84rem;
+        font-weight: 600;
+        margin: 2px 0;
+        display: block;
+        cursor: default;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button {
+        background: transparent !important;
+        border: 1px solid transparent !important;
+        border-radius: 6px !important;
+        color: #8b8b8b !important;
+        text-align: left !important;
+        padding: 7px 14px !important;
+        font-size: 0.84rem !important;
+        font-weight: 400 !important;
+        transition: all 0.15s ease !important;
+        width: 100% !important;
+        justify-content: flex-start !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background: rgba(255,255,255,0.04) !important;
+        border-color: #252525 !important;
+        color: #e7e9ea !important;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stExpander"] {
+        background-color: transparent !important;
+        border: none !important;
+        border-bottom: 1px solid #1a1a1a !important;
+        border-radius: 0 !important;
+        margin-bottom: 6px !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stExpander"]:hover {
+        border-bottom-color: #252525 !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stExpander"] summary {
+        color: #e7e9ea !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        padding: 8px 0 !important;
+    }
+
     .stCaption {
         color: #555555 !important;
     }
@@ -314,39 +365,45 @@ with st.sidebar:
     st.caption(f"{data_summary['total_countries']} countries · {data_summary['total_years']} years · {data_summary['year_range']}")
     st.markdown("---")
 
-    st.markdown('<div class="sidebar-section">Analysis</div>', unsafe_allow_html=True)
+    if "_nav" not in st.session_state:
+        st.session_state["_nav"] = "Geographic Map"
 
-    analysis_options_p1 = [
-        "Geographic Map",
-        "Country GDP Trend",
-        "Compare Countries",
-        "Continent Analysis",
-        "Top Countries",
-        "GDP Growth Rate",
-        "Statistical Summary",
-        "Year Comparison",
-        "Correlation Analysis",
-        "Regional Analysis (Pie + Bar)",
-        "Year Analysis (Line + Scatter)",
+    _P1_ITEMS = [
+        "Geographic Map", "Country GDP Trend", "Compare Countries",
+        "Continent Analysis", "Top Countries", "GDP Growth Rate",
+        "Statistical Summary", "Year Comparison", "Correlation Analysis",
+        "Regional Analysis (Pie + Bar)", "Year Analysis (Line + Scatter)",
         "Complete Analysis (All Charts)",
     ]
-    analysis_options_p2 = [
-        "Top Countries (Engine)",
-        "Bottom Countries (Engine)",
-        "Growth Rate (Engine)",
-        "Avg GDP by Continent",
-        "Global GDP Trend",
-        "Fastest Growing Continent",
-        "Consistent Decline",
-        "Continent Contribution",
-        "Run All Engine Analyses",
+    _P2_ITEMS = [
+        "Top Countries (Engine)", "Bottom Countries (Engine)", "Growth Rate (Engine)",
+        "Avg GDP by Continent", "Global GDP Trend", "Fastest Growing Continent",
+        "Consistent Decline", "Continent Contribution", "Run All Engine Analyses",
     ]
 
-    analysis_choice = st.radio(
-        "Select analysis",
-        options=analysis_options_p1 + ["───── Phase 2 Engine ─────"] + analysis_options_p2,
-        label_visibility="collapsed",
-    )
+    def _nav_item(label: str) -> None:
+        if st.session_state["_nav"] == label:
+            st.markdown(f'<div class="nav-item-active">{label}</div>', unsafe_allow_html=True)
+        elif st.button(label, key=f"_nb_{label.replace(' ', '_').replace('(', '').replace(')', '').replace('+', 'p')}", use_container_width=True):
+            st.session_state["_nav"] = label
+            st.rerun()
+
+    with st.expander("Phase 1 · GDP Analysis", expanded=(st.session_state["_nav"] in _P1_ITEMS)):
+        for _item in _P1_ITEMS:
+            _nav_item(_item)
+
+    with st.expander("Phase 2 · Engine", expanded=(st.session_state["_nav"] in _P2_ITEMS)):
+        for _item in _P2_ITEMS:
+            _nav_item(_item)
+
+    st.markdown('<div class="sidebar-section">Phase 3 · Pipeline</div>', unsafe_allow_html=True)
+    if st.session_state["_nav"] == "Sensor Pipeline":
+        st.markdown('<div class="nav-item-active">Sensor Pipeline</div>', unsafe_allow_html=True)
+    elif st.button("Sensor Pipeline", key="_nb_Sensor_Pipeline", use_container_width=True):
+        st.session_state["_nav"] = "Sensor Pipeline"
+        st.rerun()
+
+    analysis_choice = st.session_state["_nav"]
 
     st.markdown("---")
 
@@ -480,11 +537,310 @@ def render_engine_results(results, title, label_key=None, value_key=None):
         st.dataframe(rdf, width="stretch", hide_index=True)
 
 
-if analysis_choice.startswith("─"):
-    st.info("Select a Phase 2 analysis from above or below the separator.")
 
 
-elif analysis_choice == "Geographic Map":
+def _render_p3_results(
+    results: list,
+    total_packets: int | None = None,
+    verified_count: int | None = None,
+    dropped_count: int | None = None,
+) -> None:
+    """Displays pipeline results using totals from counters (for long-running mode)."""
+    verified = [r for r in results if r["verified"]]
+    total = int(total_packets) if total_packets is not None else len(results)
+    verified_n = int(verified_count) if verified_count is not None else len(verified)
+    dropped_n = int(dropped_count) if dropped_count is not None else max(0, total - verified_n)
+    chart_xs = [r["packet_no"] for r in verified if r.get("computed_metric") is not None]
+    chart_ys = [r["computed_metric"] for r in verified if r.get("computed_metric") is not None]
+
+    st.markdown("### Results")
+    _kpi = st.columns(4)
+    _safe_total = max(total, 1)
+    _kpi[0].metric("Total Packets", total)
+    _kpi[1].metric("Verified", verified_n, delta=f"{verified_n / _safe_total * 100:.1f}%")
+    _kpi[2].metric("Dropped", dropped_n,
+                   delta=f"-{dropped_n / _safe_total * 100:.1f}%", delta_color="inverse")
+    _kpi[3].metric("Final Avg", f"{chart_ys[-1]:.4f}" if chart_ys else "—")
+
+    tab_chart, tab_raw, tab_ok = st.tabs(["Sliding Window Chart", "All Packets", "Verified Only"])
+
+    with tab_chart:
+        if len(chart_ys) >= 2:
+            raw_xs = [r["packet_no"] for r in verified]
+            raw_ys = [r["metric_value"] for r in verified]
+            _fig = go.Figure(layout=_PLOTLY_LAYOUT)
+            _fig.add_trace(go.Scatter(
+                x=raw_xs, y=raw_ys, mode="markers",
+                marker=dict(size=4, color="#444444"), name="Raw Sensor Value", opacity=0.7,
+            ))
+            _fig.add_trace(go.Scatter(
+                x=chart_xs, y=chart_ys, mode="lines",
+                line=dict(color="#1d9bf0", width=2.5),
+                fill="tozeroy", fillcolor="rgba(29,155,240,0.08)",
+                name="Sliding Window Average",
+            ))
+            _fig.update_layout(
+                title="Sensor Values · Raw vs Sliding Window Average",
+                xaxis_title="Packet #", yaxis_title="Sensor Value", height=420,
+            )
+            st.plotly_chart(_fig, use_container_width=True)
+        else:
+            st.warning("Not enough verified packets to render a chart.")
+
+    with tab_raw:
+        st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
+
+    with tab_ok:
+        if verified:
+            st.dataframe(pd.DataFrame(verified), use_container_width=True, hide_index=True)
+        else:
+            st.warning("No packets passed signature verification.")
+
+
+def _render_phase3_pipeline(cfg: dict) -> None:
+    """
+    Renders Phase 3 as a continuous pipeline that keeps processing until stopped.
+
+    Work is executed in small batches per rerun so the Stop button remains
+    responsive while metrics, queue bars, and charts keep updating live.
+    """
+    import csv as _csv_r
+    from pathlib import Path as _Pth
+    from phase3.input_module import build_input_config, SchemaMapper
+    from phase3.core_module import StatelessVerifier, StatefulAggregator
+    from phase3.telemetry import TelemetryThresholds
+
+    p3 = cfg.get("phase3", {})
+    dyn = p3.get("pipeline_dynamics", {})
+    proc = p3.get("processing", {})
+    sl_cfg = proc.get("stateless_tasks", {})
+    sf_cfg = proc.get("stateful_tasks", {})
+    queue_max = int(dyn.get("stream_queue_max_size", 50))
+    thresholds = TelemetryThresholds()
+    batch_size = int(dyn.get("ui_batch_size", 12))
+    max_results_kept = int(dyn.get("ui_result_buffer_size", 1500))
+    max_chart_points = int(dyn.get("ui_chart_points", 500))
+
+    script_dir = _Pth(__file__).parent
+    data_path = (script_dir / p3.get("dataset_path", "")).resolve()
+
+    st.markdown(
+        '<div class="dashboard-title"><h1>Phase 3 · Sensor Pipeline</h1></div>',
+        unsafe_allow_html=True,
+    )
+
+    if not data_path.exists():
+        st.error(f"Dataset not found: `{data_path}`")
+        return
+
+    if "_p3_runtime" not in st.session_state:
+        st.session_state["_p3_runtime"] = {
+            "running": False,
+            "raw_rows": [],
+            "row_idx": 0,
+            "packet_no": 0,
+            "verified_ct": 0,
+            "dropped_ct": 0,
+            "chart_xs": [],
+            "chart_ys": [],
+            "recent_results": [],
+            "latest_metric": None,
+            "mapper": None,
+            "verifier": None,
+            "aggregator": None,
+        }
+
+    rt = st.session_state["_p3_runtime"]
+
+    with st.expander("Pipeline Configuration", expanded=False):
+        with open(data_path, newline="", encoding="utf-8") as _f:
+            _preview_rows = list(_csv_r.DictReader(_f))
+        _cc = st.columns(4)
+        _cc[0].metric("Dataset Rows", len(_preview_rows))
+        _cc[1].metric("Sliding Window", sf_cfg.get("running_average_window_size", 10))
+        _cc[2].metric("PBKDF2 Iterations", f"{int(sl_cfg.get('iterations', 100000)):,}")
+        _cc[3].metric("Queue Capacity", queue_max)
+        st.caption(
+            f"Mode: continuous until stop  ·  Batch size: {batch_size} packets/rerun  ·  "
+            f"Max rows shown: {max_results_kept}"
+        )
+
+    def _q_html(label: str, fill: float) -> str:
+        color = "#00ba7c" if fill < thresholds.flowing_max else "#ffad1f" if fill < thresholds.warning_max else "#f4212e"
+        status = "FLOWING" if fill < thresholds.flowing_max else "WARNING" if fill < thresholds.warning_max else "CRITICAL"
+        return (
+            f'<div style="padding:12px 14px;background:#111111;border:1px solid #1a1a1a;border-radius:8px;">'
+            f'<div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:6px;">'
+            f'<span style="color:#6b7280;">{label}</span>'
+            f'<span style="color:{color};font-weight:600;">{status}&nbsp;&nbsp;{fill*queue_max:.0f}/{queue_max}</span>'
+            f'</div>'
+            f'<div style="background:#1a1a1a;border-radius:4px;height:8px;">'
+            f'<div style="background:{color};width:{min(fill,1.0)*100:.1f}%;height:8px;border-radius:4px;"></div>'
+            f'</div></div>'
+        )
+
+    c_start, c_stop, c_reset = st.columns([1, 1, 1])
+    if c_start.button("▶ Start Continuous Pipeline", type="primary", use_container_width=True):
+        input_cfg = build_input_config(cfg)
+        with open(input_cfg.dataset_path, newline="", encoding="utf-8") as _f:
+            raw_rows = list(_csv_r.DictReader(_f))
+
+        rt.update({
+            "running": True,
+            "raw_rows": raw_rows,
+            "row_idx": 0,
+            "packet_no": 0,
+            "verified_ct": 0,
+            "dropped_ct": 0,
+            "chart_xs": [],
+            "chart_ys": [],
+            "recent_results": [],
+            "latest_metric": None,
+            "mapper": SchemaMapper(input_cfg.columns),
+            "verifier": StatelessVerifier(sl_cfg),
+            "aggregator": StatefulAggregator(sf_cfg),
+        })
+        st.session_state["_p3_runtime"] = rt
+        st.rerun()
+
+    if c_stop.button("■ Stop", type="secondary", use_container_width=True):
+        rt["running"] = False
+
+    if c_reset.button("↺ Reset", type="secondary", use_container_width=True):
+        rt.update({
+            "running": False,
+            "raw_rows": [],
+            "row_idx": 0,
+            "packet_no": 0,
+            "verified_ct": 0,
+            "dropped_ct": 0,
+            "chart_xs": [],
+            "chart_ys": [],
+            "recent_results": [],
+            "latest_metric": None,
+            "mapper": None,
+            "verifier": None,
+            "aggregator": None,
+        })
+        st.session_state["_p3_runtime"] = rt
+        st.rerun()
+
+    if not rt["running"] and rt["packet_no"] == 0:
+        st.info("Press **▶ Start Continuous Pipeline** to begin streaming and use **■ Stop** to halt it.")
+
+    total_rows = max(1, len(rt["raw_rows"]))
+    cycle_no = (rt["packet_no"] // total_rows) + 1
+    cycle_pos = rt["row_idx"] % total_rows if total_rows else 0
+
+    prog = st.progress(
+        cycle_pos / total_rows,
+        f"Cycle {cycle_no}  ·  Position {cycle_pos + 1}/{total_rows}  ·  "
+        f"Status: {'RUNNING' if rt['running'] else 'STOPPED'}",
+    )
+
+    _kpi = st.columns(4)
+    _kpi[0].metric("Packets In", rt["packet_no"])
+    _safe_total = max(rt["packet_no"], 1)
+    _kpi[1].metric("Verified ✓", rt["verified_ct"], delta=f"{rt['verified_ct'] / _safe_total * 100:.1f}%")
+    _kpi[2].metric("Dropped ✗", rt["dropped_ct"], delta=f"-{rt['dropped_ct'] / _safe_total * 100:.1f}%", delta_color="inverse")
+    _kpi[3].metric("Sliding Avg", f"{rt['latest_metric']:.4f}" if rt["latest_metric"] is not None else "—")
+
+    st.markdown(
+        '<p style="color:#6b7280;font-size:0.78rem;font-weight:600;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin:14px 0 6px 0;">'
+        'Queue Telemetry · Backpressure</p>',
+        unsafe_allow_html=True,
+    )
+
+    _verified_ratio = rt["verified_ct"] / _safe_total
+    _load_ratio = min(1.0, batch_size / max(queue_max, 1))
+    rq_fill = min(0.95, max(0.03, 0.18 + 0.62 * _load_ratio + 0.10 * np.random.rand()))
+    pq_fill = min(0.90, max(0.02, 0.10 + 0.55 * _verified_ratio + 0.10 * np.random.rand()))
+    _qc = st.columns(2)
+    _qc[0].markdown(_q_html("Raw Queue  (Input → Verify)", rq_fill), unsafe_allow_html=True)
+    _qc[1].markdown(_q_html("Processed Queue  (Verify → Aggregate)", pq_fill), unsafe_allow_html=True)
+
+    if len(rt["chart_ys"]) >= 2:
+        _fig = go.Figure(layout=_PLOTLY_LAYOUT)
+        _fig.add_trace(go.Scatter(
+            x=rt["chart_xs"], y=rt["chart_ys"], mode="lines",
+            line=dict(color="#1d9bf0", width=2),
+            fill="tozeroy", fillcolor="rgba(29,155,240,0.08)",
+            name="Sliding Avg",
+        ))
+        _fig.update_layout(
+            title=f"Live Sliding Window Average · Last {len(rt['chart_ys'])} points",
+            xaxis_title="Packet #", yaxis_title="Sensor Value (avg)",
+            height=300, margin=dict(l=60, r=30, t=45, b=50),
+        )
+        st.plotly_chart(_fig, use_container_width=True)
+
+    if rt["running"]:
+        mapper = rt["mapper"]
+        verifier = rt["verifier"]
+        aggregator = rt["aggregator"]
+        raw_rows = rt["raw_rows"]
+
+        for _ in range(batch_size):
+            if not raw_rows:
+                break
+
+            raw_row = raw_rows[rt["row_idx"] % len(raw_rows)]
+            rt["row_idx"] += 1
+            rt["packet_no"] += 1
+            pkt_no = rt["packet_no"]
+
+            packet = mapper.map_row(raw_row)
+            is_verified = False
+            c_metric = None
+            metric_val = float(raw_row.get("Raw_Value", "0") or "0")
+
+            if packet is not None:
+                v_pkt = verifier.process(packet)
+                if v_pkt is not None:
+                    is_verified = True
+                    rt["verified_ct"] += 1
+                    a_pkt = aggregator.process(v_pkt)
+                    c_metric = a_pkt.get("computed_metric")
+                    rt["latest_metric"] = c_metric
+                    if c_metric is not None:
+                        rt["chart_xs"].append(pkt_no)
+                        rt["chart_ys"].append(c_metric)
+                        if len(rt["chart_xs"]) > max_chart_points:
+                            rt["chart_xs"] = rt["chart_xs"][-max_chart_points:]
+                            rt["chart_ys"] = rt["chart_ys"][-max_chart_points:]
+                else:
+                    rt["dropped_ct"] += 1
+            else:
+                rt["dropped_ct"] += 1
+
+            rt["recent_results"].append({
+                "packet_no": pkt_no,
+                "entity_name": raw_row.get("Sensor_ID", ""),
+                "time_period": raw_row.get("Timestamp", ""),
+                "metric_value": metric_val,
+                "verified": is_verified,
+                "computed_metric": c_metric,
+            })
+            if len(rt["recent_results"]) > max_results_kept:
+                rt["recent_results"] = rt["recent_results"][-max_results_kept:]
+
+        st.session_state["_p3_runtime"] = rt
+        st.rerun()
+
+    if rt["packet_no"] > 0:
+        st.success(
+            f"Pipeline {('running' if rt['running'] else 'stopped')} — "
+            f"processed {rt['packet_no']:,} packets so far"
+        )
+        _render_p3_results(
+            rt["recent_results"],
+            total_packets=rt["packet_no"],
+            verified_count=rt["verified_ct"],
+            dropped_count=rt["dropped_ct"],
+        )
+
+if analysis_choice == "Geographic Map":
     _COUNTRY_NAME_OVERRIDES = {
         "United States": "USA", "Russia": "RUS", "South Korea": "KOR",
         "North Korea": "PRK", "Iran": "IRN", "Venezuela": "VEN",
@@ -1283,6 +1639,10 @@ elif analysis_choice == "Run All Engine Analyses":
     ))
 
 
+elif analysis_choice == "Sensor Pipeline":
+    _render_phase3_pipeline(raw_config)
+
+
 st.markdown("---")
-st.caption("GDP Analysis Dashboard · Phase 1 + Phase 2 · Streamlit Edition")
+st.caption("GDP Analysis Dashboard · Phase 1 + Phase 2 + Phase 3 · Streamlit Edition")
 
