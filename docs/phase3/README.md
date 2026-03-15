@@ -1,10 +1,9 @@
-# Phase 3 Design Artifacts
+# Phase 3 Documentation
 
-This folder stores the final Phase 3 design deliverables.
+This folder stores the consolidated Phase 3 documentation.
 
-Planned artifacts:
-- Class diagram source and exported image
-- Sequence diagram source and exported image
-- Notes that describe process boundaries and queue streams
+Primary document:
 
-Detailed PlantUML sources and generated images are added in Part 11.
+1. `PHASE3_COMPLETE_GUIDE.md` - complete architecture, runtime flow, diagrams, validation evidence, run instructions, and final handoff summary.
+
+This is the main Phase 3 reference under `proj/docs/phase3`.

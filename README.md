@@ -52,6 +52,20 @@ List available analyses:
 python main.py --list
 ```
 
+### Phase 3 Pipeline
+
+Run the Phase 3 concurrent pipeline from the console:
+
+```bash
+python main.py --phase3
+```
+
+Run the dashboard and open the `Sensor Pipeline` view for the integrated Phase 3 UI:
+
+```bash
+python main.py
+```
+
 ### Build Standalone Executable
 
 ```bash
@@ -74,6 +88,15 @@ proj/
   run_dashboard.py              Desktop app launcher (used by PyInstaller)
   build_exe.py                  PyInstaller build script
   requirements.txt              Python dependencies
+  phase3/
+    __init__.py                 Phase 3 package entry
+    contracts.py                Phase 3 protocol contracts
+    input_module.py             Input producer and schema mapper
+    core_module.py              Verifier and sliding-window aggregator
+    telemetry.py                Queue telemetry publisher
+    output_module.py            Output consumer
+    orchestrator.py             Multiprocessing pipeline coordinator
+    README.md                   Phase 3 package documentation
   core/
     contracts.py                Protocol interfaces (DataSink, PipelineService)
     engine.py                   Transformation engine (Phase 2 analyses)
@@ -96,3 +119,5 @@ Edit `config.json` to change:
 **Dashboard (Phase 1):** Country GDP Trend, Compare Countries, Continent Analysis, Top Countries, GDP Growth Rate, Statistical Summary, Year Comparison, Correlation Analysis, Regional Analysis, Year Analysis, Complete Analysis
 
 **Engine (Phase 2):** Top Countries, Bottom Countries, Growth Rate, Avg GDP by Continent, Global GDP Trend, Fastest Growing Continent, Consistent Decline, Continent Contribution
+
+**Pipeline (Phase 3):** Sensor Pipeline with continuous Start/Stop controls in the Streamlit dashboard and `--phase3` CLI execution through the multiprocessing orchestrator

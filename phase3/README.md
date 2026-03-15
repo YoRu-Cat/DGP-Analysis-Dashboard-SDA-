@@ -62,21 +62,21 @@ Telemetry publisher for queue health:
 
 1. `TelemetryThresholds`: defines `flowing_max` and `warning_max`.
 2. `PipelineTelemetry`: observer-subject implementation with subscribe/unsubscribe/publish.
-3. `poll_once()`: reserved for snapshot collection implementation.
+3. `poll_once()`: samples queue size, computes utilization, classifies health, and publishes a snapshot.
 
 ### `phase3/output_module.py`
 
 Output-side consumer definitions:
 
 1. `OutputModuleConfig`: output runtime settings.
-2. `OutputModule`: output consumer shell with `run()` entry point.
+2. `OutputModule`: consumes processed packets, stores results, and emits observer updates.
 
 ### `phase3/orchestrator.py`
 
 Pipeline orchestration entry point:
 
 1. `OrchestratorConfig`: queue sizing config.
-2. `PipelineOrchestrator`: process coordinator for producer, workers, aggregator, and output.
+2. `PipelineOrchestrator`: process coordinator for producer, workers, aggregator, and lifecycle management.
 
 ## Current Implementation Status
 
@@ -85,15 +85,25 @@ Pipeline orchestration entry point:
 3. Part 3: input module - complete.
 4. Part 4: stateless verifier - complete.
 5. Part 5: stateful aggregator - complete.
-6. Part 6: orchestrator - pending.
-7. Part 7: telemetry `poll_once` - pending.
-8. Part 8: output module `run` - pending.
-9. Part 9 to Part 12: design/final artifacts - pending.
+6. Part 6: orchestrator - complete.
+7. Part 7: telemetry `poll_once` - complete.
+8. Part 8: output module `run` - complete.
+9. Part 9: architecture/design artifact - complete.
+10. Part 10: diagram artifact - complete.
+11. Part 11: validation artifact - complete.
+12. Part 12: final documentation pass - complete.
 
-## Runtime Flow (Planned Full Pipeline)
+## Runtime Flow
 
 1. `InputModule` pushes mapped packets into the raw queue.
 2. Parallel verifier workers consume raw packets and emit verified packets.
 3. Aggregator consumes verified packets and appends `computed_metric`.
-4. Output module consumes aggregated packets and reports final updates.
+4. Output module consumes aggregated packets, stores results, and emits final updates.
 5. Telemetry captures queue utilization snapshots and notifies observers.
+
+## Supporting Documents
+
+1. Root architecture guide: `PHASE3_EXPLAINED.md`
+2. Root diagram set: `PHASE3_DIAGRAMS.md`
+3. Root validation report: `PHASE3_VALIDATION.md`
+4. Root final handoff: `PHASE3_FINAL.md`
