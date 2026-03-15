@@ -546,12 +546,28 @@ def _render_p3_results(
     dropped_count: int | None = None,
 ) -> None:
     """Displays pipeline results using totals from counters (for long-running mode)."""
-    verified = [r for r in results if r["verified"]]
+    def _is_verified_packet(row: dict) -> bool:
+        if not isinstance(row, dict):
+            return False
+        if "verified" in row:
+            return bool(row.get("verified"))
+        if "is_verified" in row:
+            return bool(row.get("is_verified"))
+        if "authentic" in row:
+            return bool(row.get("authentic"))
+        # In the current Phase 3 pipeline, only verified packets reach output.
+        return True
+
+    verified = [r for r in results if _is_verified_packet(r)]
     total = int(total_packets) if total_packets is not None else len(results)
     verified_n = int(verified_count) if verified_count is not None else len(verified)
     dropped_n = int(dropped_count) if dropped_count is not None else max(0, total - verified_n)
-    chart_xs = [r["packet_no"] for r in verified if r.get("computed_metric") is not None]
-    chart_ys = [r["computed_metric"] for r in verified if r.get("computed_metric") is not None]
+    chart_xs = [
+        r.get("packet_no", r.get("packet_id", idx + 1))
+        for idx, r in enumerate(verified)
+        if r.get("computed_metric") is not None
+    ]
+    chart_ys = [r.get("computed_metric") for r in verified if r.get("computed_metric") is not None]
 
     st.markdown("### Results")
     _kpi = st.columns(4)
@@ -566,8 +582,16 @@ def _render_p3_results(
 
     with tab_chart:
         if len(chart_ys) >= 2:
-            raw_xs = [r["packet_no"] for r in verified]
-            raw_ys = [r["metric_value"] for r in verified]
+            raw_xs = [r.get("packet_no", r.get("packet_id", idx + 1)) for idx, r in enumerate(verified)]
+            raw_ys = [r.get("metric_value") for r in verified if r.get("metric_value") is not None]
+            if len(raw_ys) != len(raw_xs):
+                pairs = [
+                    (r.get("packet_no", r.get("packet_id", idx + 1)), r.get("metric_value"))
+                    for idx, r in enumerate(verified)
+                    if r.get("metric_value") is not None
+                ]
+                raw_xs = [p[0] for p in pairs]
+                raw_ys = [p[1] for p in pairs]
             _fig = go.Figure(layout=_PLOTLY_LAYOUT)
             _fig.add_trace(go.Scatter(
                 x=raw_xs, y=raw_ys, mode="markers",
@@ -600,10 +624,41 @@ def _render_p3_results(
 def _render_phase3_pipeline(cfg: dict) -> None:
     """Renders the real Phase 3 multiprocessing pipeline inside the dashboard."""
     import csv as _csv_r
+    import importlib
     import time as _time
-    from phase3 import get_phase3_config, resolve_dataset_path
     from phase3.orchestrator import PipelineOrchestrator
     from phase3.telemetry import TelemetryThresholds
+
+    _phase3_pkg = importlib.import_module("phase3")
+
+    def _local_get_phase3_config(_cfg: dict) -> dict:
+        if "phase3" in _cfg and isinstance(_cfg["phase3"], dict):
+            return _cfg["phase3"]
+        keys = {
+            "dataset_path",
+            "pipeline_dynamics",
+            "schema_mapping",
+            "processing",
+            "visualizations",
+        }
+        if any(key in _cfg for key in keys):
+            return _cfg
+        return {}
+
+    def _local_resolve_dataset_path(dataset_path: str):
+        from pathlib import Path as _Path
+
+        path = _Path(dataset_path)
+        if path.is_absolute():
+            return path
+        return (_Path(__file__).resolve().parent / dataset_path).resolve()
+
+    get_phase3_config = getattr(_phase3_pkg, "get_phase3_config", _local_get_phase3_config)
+    resolve_dataset_path = getattr(
+        _phase3_pkg,
+        "resolve_dataset_path",
+        _local_resolve_dataset_path,
+    )
 
     p3 = get_phase3_config(cfg)
     dyn = p3.get("pipeline_dynamics", {})
