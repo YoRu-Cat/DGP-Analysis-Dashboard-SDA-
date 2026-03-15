@@ -5,6 +5,8 @@ from functools import reduce
 import json
 import sys
 import importlib
+from multiprocessing import Manager, Process, Queue, Value
+from time import sleep
 
 
 _load_config = lambda path: json.loads(
@@ -189,6 +191,112 @@ def _print_usage() -> None:
     print("  'streamlit'-> render inside Streamlit dashboard")
 
 
+def run_phase3_from_main(config_path: str = 'config.json') -> None:
+    """Runs Phase 3 with main.py explicitly orchestrating queues and processes."""
+    from phase3 import get_phase3_config
+    from phase3.orchestrator import (
+        _TelemetryCollector,
+        _run_aggregator_stage,
+        _run_input_stage,
+        _run_output_stage,
+        _run_verifier_worker,
+    )
+    from phase3.telemetry import PipelineTelemetry
+
+    cfg = _load_config(config_path)
+    p3 = get_phase3_config(cfg)
+    dynamics = p3.get('pipeline_dynamics', {})
+
+    queue_size = int(dynamics.get('stream_queue_max_size', 50))
+    core_parallelism = int(dynamics.get('core_parallelism', 4))
+    telemetry_poll_seconds = float(dynamics.get('telemetry_poll_seconds', 0.05))
+
+    raw_queue = Queue(maxsize=queue_size)
+    processed_queue = Queue(maxsize=queue_size)
+    output_queue = Queue(maxsize=queue_size)
+
+    manager = Manager()
+    output_results = manager.list()
+    output_state = manager.dict({'consumed': 0, 'completed': False, 'last_packet': None})
+    seen_counter = Value('i', 0)
+    dropped_counter = Value('i', 0)
+    verified_counter = Value('i', 0)
+
+    telemetry_snapshots: list = []
+    telemetry = PipelineTelemetry({
+        'raw_stream': raw_queue,
+        'processed_stream': processed_queue,
+        'output_stream': output_queue,
+    })
+    telemetry.subscribe(_TelemetryCollector(telemetry_snapshots))
+
+    processes = [
+        Process(
+            target=_run_input_stage,
+            args=(cfg, raw_queue, core_parallelism),
+            name='p3-input',
+        )
+    ]
+
+    for idx in range(core_parallelism):
+        processes.append(
+            Process(
+                target=_run_verifier_worker,
+                args=(cfg, raw_queue, processed_queue, seen_counter, dropped_counter),
+                name=f'p3-verify-{idx + 1}',
+            )
+        )
+
+    processes.append(
+        Process(
+            target=_run_aggregator_stage,
+            args=(cfg, processed_queue, output_queue, core_parallelism, verified_counter),
+            name='p3-aggregator',
+        )
+    )
+    processes.append(
+        Process(
+            target=_run_output_stage,
+            args=(cfg, output_queue, output_results, output_state),
+            name='p3-output',
+        )
+    )
+
+    for proc in processes:
+        proc.start()
+
+    try:
+        while any(proc.is_alive() for proc in processes):
+            telemetry.poll_once()
+            sleep(telemetry_poll_seconds)
+    finally:
+        for proc in processes:
+            if proc.is_alive():
+                proc.terminate()
+        for proc in processes:
+            proc.join()
+
+    packets = list(output_results)
+    final_avg = packets[-1].get('computed_metric') if packets else None
+    summary = {
+        'packets_seen': seen_counter.value,
+        'verified': verified_counter.value,
+        'dropped': dropped_counter.value,
+        'final_average': final_avg,
+        'results': packets,
+        'telemetry': list(telemetry_snapshots),
+        'output': dict(output_state),
+    }
+
+    manager.shutdown()
+
+    print('Phase 3 pipeline complete.')
+    print(f"Packets seen: {summary['packets_seen']}")
+    print(f"Verified:     {summary['verified']}")
+    print(f"Dropped:      {summary['dropped']}")
+    print(f"Final avg:    {summary['final_average'] if summary['final_average'] is not None else 'N/A'}")
+
+
 if __name__ == '__main__':
     import multiprocessing
     multiprocessing.freeze_support()
@@ -200,9 +308,7 @@ if __name__ == '__main__':
     elif args[0] == '--cli':
         run_pipeline()
     elif args[0] == '--phase3':
-        from phase3.orchestrator import PipelineOrchestrator
-        cfg = _load_config('config.json')
-        PipelineOrchestrator(cfg).run()
+        run_phase3_from_main()
     elif args[0] == '--list':
         from core.engine import TransformationEngine
         print("Available analyses:")

@@ -685,6 +685,10 @@ def _render_phase3_pipeline(cfg: dict) -> None:
         st.session_state["_p3_runtime"] = None
     if "_p3_last_run" not in st.session_state:
         st.session_state["_p3_last_run"] = None
+    if "_p3_should_run" not in st.session_state:
+        st.session_state["_p3_should_run"] = False
+    if "_p3_cycle_count" not in st.session_state:
+        st.session_state["_p3_cycle_count"] = 0
 
     with open(data_path, newline="", encoding="utf-8") as _f:
         preview_rows = list(_csv_r.DictReader(_f))
@@ -751,18 +755,25 @@ def _render_phase3_pipeline(cfg: dict) -> None:
         def on_telemetry_update(self, snapshot: dict) -> None:
             self._runtime["latest_snapshot"] = snapshot
 
-    c_start, c_stop, c_reset = st.columns([1, 1, 1])
-    if c_start.button("▶ Start Continuous Pipeline", type="primary", use_container_width=True):
+    def _start_new_cycle() -> None:
         orchestrator = PipelineOrchestrator(cfg)
         runtime = orchestrator.start()
         runtime["latest_snapshot"] = None
         runtime["dashboard_observer"] = _DashboardTelemetryObserver(runtime)
         runtime["telemetry"].subscribe(runtime["dashboard_observer"])
         st.session_state["_p3_runtime"] = {"orchestrator": orchestrator, "runtime": runtime}
+        st.session_state["_p3_cycle_count"] = int(st.session_state.get("_p3_cycle_count", 0)) + 1
+
+    c_start, c_pause, c_reset = st.columns([1, 1, 1])
+    if c_start.button("▶ Start Continuous Pipeline", type="primary", use_container_width=True):
+        st.session_state["_p3_should_run"] = True
+        if st.session_state.get("_p3_runtime") is None:
+            _start_new_cycle()
         st.session_state["_p3_last_run"] = None
         st.rerun()
 
-    if c_stop.button("■ Stop", type="secondary", use_container_width=True):
+    if c_pause.button("⏸ Pause", type="secondary", use_container_width=True):
+        st.session_state["_p3_should_run"] = False
         live = st.session_state.get("_p3_runtime")
         if live is not None:
             live["orchestrator"].stop(live["runtime"])
@@ -771,18 +782,24 @@ def _render_phase3_pipeline(cfg: dict) -> None:
             st.rerun()
 
     if c_reset.button("↺ Reset", type="secondary", use_container_width=True):
+        st.session_state["_p3_should_run"] = False
         live = st.session_state.get("_p3_runtime")
         if live is not None:
             live["orchestrator"].stop(live["runtime"])
         st.session_state["_p3_runtime"] = None
         st.session_state["_p3_last_run"] = None
+        st.session_state["_p3_cycle_count"] = 0
         st.rerun()
 
     live = st.session_state.get("_p3_runtime")
     summary = st.session_state.get("_p3_last_run")
 
+    if live is None and st.session_state.get("_p3_should_run", False):
+        _start_new_cycle()
+        st.rerun()
+
     if live is None and summary is None:
-        st.info("Press **▶ Start Continuous Pipeline** to begin streaming and use **■ Stop** to halt it.")
+        st.info("Press **▶ Start Continuous Pipeline** to begin streaming and use **⏸ Pause** to halt it.")
         return
 
     if live is not None:
@@ -795,6 +812,8 @@ def _render_phase3_pipeline(cfg: dict) -> None:
         if not running:
             st.session_state["_p3_last_run"] = orchestrator.finalize(runtime)
             st.session_state["_p3_runtime"] = None
+            if st.session_state.get("_p3_should_run", False):
+                _start_new_cycle()
             st.rerun()
 
         seen = runtime["seen_counter"].value
@@ -808,7 +827,7 @@ def _render_phase3_pipeline(cfg: dict) -> None:
             latest_metric = last_packet.get("computed_metric")
 
         total_rows = max(1, len(preview_rows))
-        cycle_no = (seen // total_rows) + 1
+        cycle_no = int(st.session_state.get("_p3_cycle_count", 1))
         cycle_pos = seen % total_rows
         st.progress(
             cycle_pos / total_rows,
