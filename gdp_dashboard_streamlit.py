@@ -684,8 +684,6 @@ def _render_phase3_pipeline(cfg: dict) -> None:
         st.session_state["_p3_runtime"] = None
     if "_p3_last_run" not in st.session_state:
         st.session_state["_p3_last_run"] = None
-    if "_p3_should_run" not in st.session_state:
-        st.session_state["_p3_should_run"] = False
     if "_p3_cycle_count" not in st.session_state:
         st.session_state["_p3_cycle_count"] = 0
 
@@ -703,17 +701,19 @@ def _render_phase3_pipeline(cfg: dict) -> None:
             f"Core workers: {int(dyn.get('core_parallelism', 4))}"
         )
 
-    def _q_html(label: str, snapshot: dict) -> str:
-        fill = float(snapshot.get("utilization", 0.0))
+    def _q_html(label: str, snapshot: dict, progress_ratio: float | None = None, progress_text: str | None = None) -> str:
+        util_fill = float(snapshot.get("utilization", 0.0))
+        fill = max(0.0, min(1.0, float(progress_ratio))) if progress_ratio is not None else util_fill
         color = "#00ba7c" if fill < thresholds.flowing_max else "#ffad1f" if fill < thresholds.warning_max else "#f4212e"
         status = str(snapshot.get("state", "flowing")).upper()
         size = int(snapshot.get("size", 0))
         capacity = int(snapshot.get("capacity", queue_max))
+        rhs = progress_text if progress_text is not None else f"{status}&nbsp;&nbsp;{size}/{capacity}"
         return (
             f'<div style="padding:12px 14px;background:#111111;border:1px solid #1a1a1a;border-radius:8px;">'
             f'<div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:6px;">'
             f'<span style="color:#6b7280;">{label}</span>'
-            f'<span style="color:{color};font-weight:600;">{status}&nbsp;&nbsp;{size}/{capacity}</span>'
+            f'<span style="color:{color};font-weight:600;">{rhs}</span>'
             f'</div>'
             f'<div style="background:#1a1a1a;border-radius:4px;height:8px;">'
             f'<div style="background:{color};width:{min(fill,1.0)*100:.1f}%;height:8px;border-radius:4px;"></div>'
@@ -764,15 +764,13 @@ def _render_phase3_pipeline(cfg: dict) -> None:
         st.session_state["_p3_cycle_count"] = int(st.session_state.get("_p3_cycle_count", 0)) + 1
 
     c_start, c_pause, c_reset = st.columns([1, 1, 1])
-    if c_start.button("▶ Start Continuous Pipeline", type="primary", use_container_width=True):
-        st.session_state["_p3_should_run"] = True
+    if c_start.button("▶ Start Pipeline", type="primary", use_container_width=True):
         if st.session_state.get("_p3_runtime") is None:
             _start_new_cycle()
         st.session_state["_p3_last_run"] = None
         st.rerun()
 
     if c_pause.button("⏸ Pause", type="secondary", use_container_width=True):
-        st.session_state["_p3_should_run"] = False
         live = st.session_state.get("_p3_runtime")
         if live is not None:
             live["orchestrator"].stop(live["runtime"])
@@ -781,7 +779,6 @@ def _render_phase3_pipeline(cfg: dict) -> None:
             st.rerun()
 
     if c_reset.button("↺ Reset", type="secondary", use_container_width=True):
-        st.session_state["_p3_should_run"] = False
         live = st.session_state.get("_p3_runtime")
         if live is not None:
             live["orchestrator"].stop(live["runtime"])
@@ -793,12 +790,8 @@ def _render_phase3_pipeline(cfg: dict) -> None:
     live = st.session_state.get("_p3_runtime")
     summary = st.session_state.get("_p3_last_run")
 
-    if live is None and st.session_state.get("_p3_should_run", False):
-        _start_new_cycle()
-        st.rerun()
-
     if live is None and summary is None:
-        st.info("Press **▶ Start Continuous Pipeline** to begin streaming and use **⏸ Pause** to halt it.")
+        st.info("Press **▶ Start Pipeline** to run once. Use **↺ Reset** to clear results, then press Start again for rerun.")
         return
 
     if live is not None:
@@ -811,8 +804,6 @@ def _render_phase3_pipeline(cfg: dict) -> None:
         if not running:
             st.session_state["_p3_last_run"] = orchestrator.finalize(runtime)
             st.session_state["_p3_runtime"] = None
-            if st.session_state.get("_p3_should_run", False):
-                _start_new_cycle()
             st.rerun()
 
         seen = runtime["seen_counter"].value
@@ -826,11 +817,12 @@ def _render_phase3_pipeline(cfg: dict) -> None:
             latest_metric = last_packet.get("computed_metric")
 
         total_rows = max(1, len(preview_rows))
+        consumed = int(output_state.get("consumed", 0))
         cycle_no = int(st.session_state.get("_p3_cycle_count", 1))
-        cycle_pos = seen % total_rows
+        cycle_pos = min(seen, total_rows)
         st.progress(
             cycle_pos / total_rows,
-            f"Cycle {cycle_no}  ·  Position {cycle_pos + 1}/{total_rows}  ·  Status: RUNNING",
+            f"Run {cycle_no}  ·  Position {cycle_pos}/{total_rows}  ·  Status: RUNNING",
         )
 
         _kpi = st.columns(4)
@@ -848,16 +840,34 @@ def _render_phase3_pipeline(cfg: dict) -> None:
         )
 
         queue_cards = []
+        seen_ratio = min(1.0, seen / total_rows)
+        verified_ratio = min(1.0, verified / total_rows)
+        consumed_ratio = min(1.0, consumed / total_rows)
         if telemetry_cfg.get("show_raw_stream", True):
-            queue_cards.append(("Raw Queue  (Input → Verify)", snapshot["queues"].get("raw_stream", {})))
+            queue_cards.append((
+                "Raw Queue  (Input → Verify)",
+                snapshot["queues"].get("raw_stream", {}),
+                seen_ratio,
+                f"{seen}/{total_rows}",
+            ))
         if telemetry_cfg.get("show_intermediate_stream", True):
-            queue_cards.append(("Processed Queue  (Verify → Aggregate)", snapshot["queues"].get("processed_stream", {})))
+            queue_cards.append((
+                "Processed Queue  (Verify → Aggregate)",
+                snapshot["queues"].get("processed_stream", {}),
+                verified_ratio,
+                f"{verified}/{total_rows}",
+            ))
         if telemetry_cfg.get("show_processed_stream", True):
-            queue_cards.append(("Output Queue  (Aggregate → Output)", snapshot["queues"].get("output_stream", {})))
+            queue_cards.append((
+                "Output Queue  (Aggregate → Output)",
+                snapshot["queues"].get("output_stream", {}),
+                consumed_ratio,
+                f"{consumed}/{total_rows}",
+            ))
 
         q_cols = st.columns(len(queue_cards)) if queue_cards else []
-        for col, (label, q_snapshot) in zip(q_cols, queue_cards):
-            col.markdown(_q_html(label, q_snapshot), unsafe_allow_html=True)
+        for col, (label, q_snapshot, ratio, ptxt) in zip(q_cols, queue_cards):
+            col.markdown(_q_html(label, q_snapshot, ratio, ptxt), unsafe_allow_html=True)
 
         _render_configured_charts(results)
         if results:
