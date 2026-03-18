@@ -1,9 +1,24 @@
 # Phase 3 Documentation
 
-This folder stores the consolidated Phase 3 documentation.
+This folder contains the final Phase 3 design and delivery documents.
 
-Primary document:
+## Main Reference
 
-1. `PHASE3_COMPLETE_GUIDE.md` - complete architecture, runtime flow, diagrams, validation evidence, run instructions, and final handoff summary.
+1. PHASE3_COMPLETE_GUIDE.md
+   Complete architecture, requirements mapping, runtime flow, telemetry behavior,
+   validation steps, and execution instructions.
 
-This is the main Phase 3 reference under `proj/docs/phase3`.
+## Diagram Sources
+
+1. phase3_class_diagram.puml
+2. phase3_sequence_diagram.puml
+
+## Generated Diagram Images
+
+1. phase3_class_diagram.png
+2. phase3_sequence_diagram.png
+
+## Notes
+
+1. These files match the implemented multiprocessing pipeline with observer telemetry.
+2. The guide is the single consolidated reference for Phase 3 review and grading.

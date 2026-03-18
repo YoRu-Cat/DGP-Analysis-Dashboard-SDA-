@@ -555,7 +555,6 @@ def _render_p3_results(
             return bool(row.get("is_verified"))
         if "authentic" in row:
             return bool(row.get("authentic"))
-        # In the current Phase 3 pipeline, only verified packets reach output.
         return True
 
     verified = [r for r in results if _is_verified_packet(r)]
